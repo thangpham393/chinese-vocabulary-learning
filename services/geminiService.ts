@@ -12,8 +12,9 @@ const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
+// Enrich vocabulary list using Gemini AI to get structured data
 export const enrichVocabularyWithAI = async (rawWords: string): Promise<VocabularyItem[]> => {
-  const prompt = `Dịch và phân tích các từ Tiếng Trung sau sang Tiếng Việt: "${rawWords}". Trả về JSON array: word, pinyin, partOfSpeech, definitionVi, definitionEn, exampleZh, exampleVi.`;
+  const prompt = `Phân tích danh sách từ vựng Tiếng Trung sau: "${rawWords}". Trả về JSON array: word, pinyin, partOfSpeech, definitionVi, definitionEn, exampleZh, exampleVi.`;
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -39,26 +40,38 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
       },
     });
     const results = JSON.parse(response.text || "[]");
-    return results.map((item: any, idx: number) => ({ ...item, id: `v-${Date.now()}-${idx}` }));
+    return results.map((item: any, idx: number) => ({ ...item, id: `${Date.now()}-${idx}` }));
   } catch (error) { return []; }
 };
 
+// Save custom lesson and vocabulary to Supabase
 export const saveCustomLesson = async (category: Category, lesson: Lesson, vocabulary: VocabularyItem[]) => {
   if (!supabase) return false;
   try {
-    // Chỉ sử dụng các cột chắc chắn có: id, level, number, title, description
-    const { error: lessonError } = await supabase.from('lessons').upsert({
-      id: lesson.id,
+    // Chuyển ID sang số nếu có thể để tránh lỗi kiểu dữ liệu
+    const numericId = typeof lesson.id === 'string' && lesson.id.includes('lesson-') 
+      ? parseInt(lesson.id.replace('lesson-', '')) 
+      : Date.now();
+
+    const lessonPayload = {
+      id: numericId,
       level: Number(category.level),
       number: Number(lesson.number),
-      title: lesson.title,
-      description: lesson.description || ""
-    });
-    if (lessonError) throw lessonError;
+      title: String(lesson.title),
+      description: String(lesson.description || "")
+    };
 
-    await supabase.from('vocabulary').delete().eq('lesson_id', lesson.id);
+    const { error: lessonError } = await supabase.from('lessons').upsert(lessonPayload);
+    
+    if (lessonError) {
+      console.error("SUPABASE ERROR (Lessons):", lessonError.message, lessonError.details);
+      throw lessonError;
+    }
+
+    // Lưu từ vựng
+    await supabase.from('vocabulary').delete().eq('lesson_id', numericId);
     const vocabToInsert = vocabulary.map(v => ({
-      lesson_id: lesson.id,
+      lesson_id: numericId,
       word: v.word,
       pinyin: v.pinyin,
       part_of_speech: v.partOfSpeech,
@@ -67,15 +80,21 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
       example_zh: v.exampleZh,
       example_vi: v.exampleVi
     }));
+
     const { error: vocabError } = await supabase.from('vocabulary').insert(vocabToInsert);
-    if (vocabError) throw vocabError;
+    if (vocabError) {
+      console.error("SUPABASE ERROR (Vocabulary):", vocabError.message);
+      throw vocabError;
+    }
+    
     return true;
   } catch (e) {
-    console.error("Save Error:", e);
+    console.error("Critical Save Error:", e);
     return false;
   }
 };
 
+// Fetch lessons belonging to a category
 export const fetchLessonsByCategory = async (category: Category): Promise<Lesson[]> => {
   const staticData = (category.level && HSK_STATIC_LESSONS[category.level]) ? HSK_STATIC_LESSONS[category.level] : [];
   if (!supabase) return staticData;
@@ -84,6 +103,7 @@ export const fetchLessonsByCategory = async (category: Category): Promise<Lesson
   return [...staticData, ...data];
 };
 
+// Fetch all vocabulary items for a lesson
 export const fetchVocabularyForLesson = async (lesson: Lesson): Promise<VocabularyItem[]> => {
   if (HSK_STATIC_VOCABULARY[lesson.id]) return HSK_STATIC_VOCABULARY[lesson.id];
   if (!supabase) return [];
@@ -95,6 +115,7 @@ export const fetchVocabularyForLesson = async (lesson: Lesson): Promise<Vocabula
   }));
 };
 
+// Retrieve total counts for UI display
 export const getGlobalStats = async () => {
   if (!supabase) return { totalWords: 0, totalLessons: 0 };
   const { count: v } = await supabase.from('vocabulary').select('*', { count: 'exact', head: true });
@@ -102,6 +123,41 @@ export const getGlobalStats = async () => {
   return { totalWords: v || 0, totalLessons: l || 0 };
 };
 
+// Generate image for a word using Gemini Image model
+export const generateImageForWord = async (word: string, definition: string): Promise<string | undefined> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          {
+            text: `An educational, high-quality minimalist illustration for the Chinese word "${word}" which means "${definition}". Simple clean style on a solid light background.`,
+          },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: "1:1",
+        },
+      },
+    });
+
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          const base64EncodeString: string = part.inlineData.data;
+          return `data:image/png;base64,${base64EncodeString}`;
+        }
+      }
+    }
+    return undefined;
+  } catch (error) {
+    console.error("Image generation failed:", error);
+    return undefined;
+  }
+};
+
+// Speak text using Gemini Text-to-Speech
 export const speakText = async (text: string, speed: number = 1.0) => {
   try {
     const response = await ai.models.generateContent({
@@ -114,27 +170,45 @@ export const speakText = async (text: string, speed: number = 1.0) => {
     });
     const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64) {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      const bin = atob(base64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const dataInt16 = new Int16Array(bytes.buffer);
-      const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-      buffer.getChannelData(0).set(Array.from(dataInt16).map(v => v / 32768));
-      const src = ctx.createBufferSource();
-      src.buffer = buffer; src.playbackRate.value = speed;
-      src.connect(ctx.destination); src.start();
-    }
-  } catch (e) {}
-};
+      const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      
+      const decode = (base64Str: string) => {
+        const binaryString = atob(base64Str);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+      };
 
-export const generateImageForWord = async (word: string, definition: string) => {
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: { parts: [{ text: `Simple icon for "${word}" (${definition})` }] },
-    });
-    const base64 = response.candidates[0].content.parts.find(p => p.inlineData)?.inlineData?.data;
-    return base64 ? `data:image/png;base64,${base64}` : undefined;
-  } catch (e) { return undefined; }
+      const decodeAudioData = async (
+        data: Uint8Array,
+        ctx: AudioContext,
+        sampleRate: number,
+        numChannels: number,
+      ): Promise<AudioBuffer> => {
+        const dataInt16 = new Int16Array(data.buffer);
+        const frameCount = dataInt16.length / numChannels;
+        const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+        for (let channel = 0; channel < numChannels; channel++) {
+          const channelData = buffer.getChannelData(channel);
+          for (let i = 0; i < frameCount; i++) {
+            channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+          }
+        }
+        return buffer;
+      };
+
+      const audioBuffer = await decodeAudioData(decode(base64), outputAudioContext, 24000, 1);
+      const source = outputAudioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.playbackRate.value = speed;
+      source.connect(outputAudioContext.destination);
+      source.start();
+    }
+  } catch (e) {
+    console.error("Speech generation error:", e);
+  }
 };
