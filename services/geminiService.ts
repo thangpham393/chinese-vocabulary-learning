@@ -31,9 +31,6 @@ const saveLocalVocab = (lessonId: string | number, vocab: VocabularyItem[]) => {
   localStorage.setItem(`vocab_${lessonId}`, JSON.stringify(vocab));
 };
 
-/**
- * AI phân tích danh sách từ vựng
- */
 export const enrichVocabularyWithAI = async (rawWords: string): Promise<VocabularyItem[]> => {
   const wordsArray = rawWords.split(/[\n,，]+/).map(w => w.trim()).filter(w => w.length > 0);
   if (wordsArray.length === 0) return [];
@@ -78,9 +75,6 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
   }
 };
 
-/**
- * Lưu bài học (Hybrid: Supabase -> LocalStorage)
- */
 export const saveCustomLesson = async (category: Category, lesson: Lesson, vocabulary: VocabularyItem[]) => {
   const lessonId = Date.now();
   const newLesson = { ...lesson, id: String(lessonId), level: category.level };
@@ -116,7 +110,6 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
     }
   }
 
-  // Fallback to local storage
   saveLocalLesson(category.level, newLesson);
   saveLocalVocab(lessonId, vocabulary);
   return true;
@@ -125,8 +118,10 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
 export const fetchLessons = async (level: number): Promise<Lesson[]> => {
   let dbLessons: Lesson[] = [];
   if (supabase) {
-    const { data } = await supabase.from('lessons').select('*').eq('level', level).order('number');
-    dbLessons = data || [];
+    try {
+      const { data } = await supabase.from('lessons').select('*').eq('level', level).order('number');
+      dbLessons = data || [];
+    } catch (e) { console.warn("Fetch lessons DB failed"); }
   }
   const localLessons = getLocalLessons(level);
   return [...dbLessons, ...localLessons];
@@ -134,14 +129,16 @@ export const fetchLessons = async (level: number): Promise<Lesson[]> => {
 
 export const fetchVocab = async (lessonId: string | number): Promise<VocabularyItem[]> => {
   if (supabase) {
-    const { data } = await supabase.from('vocabulary').select('*').eq('lesson_id', lessonId);
-    if (data && data.length > 0) {
-      return data.map(d => ({
-        id: String(d.id), word: d.word, pinyin: d.pinyin, partOfSpeech: d.part_of_speech,
-        definitionVi: d.definition_vi, definitionEn: d.definition_en,
-        exampleZh: d.example_zh, exampleVi: d.example_vi
-      }));
-    }
+    try {
+      const { data } = await supabase.from('vocabulary').select('*').eq('lesson_id', lessonId);
+      if (data && data.length > 0) {
+        return data.map(d => ({
+          id: String(d.id), word: d.word, pinyin: d.pinyin, partOfSpeech: d.part_of_speech,
+          definitionVi: d.definition_vi, definitionEn: d.definition_en,
+          exampleZh: d.example_zh, exampleVi: d.example_vi
+        }));
+      }
+    } catch (e) { console.warn("Fetch vocab DB failed"); }
   }
   return getLocalVocab(lessonId);
 };
@@ -171,7 +168,7 @@ export const speak = async (text: string, rate: number = 1.0) => {
       src.connect(ctx.destination);
       src.start();
     }
-  } catch (e) {}
+  } catch (e) { console.error("TTS Error", e); }
 };
 
 export const genImage = async (word: string): Promise<string | undefined> => {

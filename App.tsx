@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Header from './components/Header';
 import CategoryCard from './components/CategoryCard';
 import FlashcardStudy from './components/FlashcardStudy';
@@ -142,12 +142,6 @@ const App: React.FC = () => {
                   <div className="text-slate-400 font-medium text-sm">{l.description}</div>
                 </button>
               ))}
-              {lessons.length === 0 && (
-                <div className="col-span-full py-20 text-center">
-                  <div className="text-6xl mb-4 opacity-20">📭</div>
-                  <p className="text-slate-400 font-bold">Chưa có bài học nào. Hãy nhấn "Thêm bài học mới"!</p>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -159,7 +153,6 @@ const App: React.FC = () => {
               Quay lại bài học
             </button>
             <div className="text-center mb-12">
-              <div className="text-indigo-600 font-black text-xs uppercase tracking-[0.3em] mb-4">Lựa chọn chế độ</div>
               <h2 className="text-5xl font-black text-slate-900">{selectedLesson?.title}</h2>
             </div>
             <div className="flex flex-col gap-5">
@@ -195,7 +188,6 @@ const App: React.FC = () => {
         {loading && (
           <div className="fixed inset-0 bg-white/80 backdrop-blur-md z-[200] flex flex-col items-center justify-center">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-            <p className="font-black text-indigo-600 animate-pulse">Đang tải dữ liệu...</p>
           </div>
         )}
       </main>
@@ -203,60 +195,23 @@ const App: React.FC = () => {
       <BottomNav currentMode={mode} onHome={() => setMode(AppMode.HOME)} onReview={() => {}} />
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xl z-[300] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl animate-in zoom-in duration-300 relative">
-            <button onClick={() => setShowModal(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600 transition-colors">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            
-            <h3 className="text-4xl font-black mb-2">Tạo bài học</h3>
-            <p className="text-slate-400 font-medium mb-10">AI sẽ tự động dịch, phiên âm và tạo ví dụ cho bạn.</p>
-            
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xl z-[300] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] w-full max-w-xl p-10 shadow-2xl animate-in zoom-in duration-300">
+            <h3 className="text-4xl font-black mb-10">Tạo bài học</h3>
             <div className="space-y-8">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-2">Cấp độ / Chủ đề</label>
-                  <select value={importLevel} onChange={e => setImportLevel(Number(e.target.value))} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold outline-none focus:ring-4 ring-indigo-50/50 focus:border-indigo-400 transition-all appearance-none cursor-pointer">
-                    <optgroup label="HSK Standard">
-                      {HSK_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
-                    </optgroup>
-                    <optgroup label="Chủ đề mở rộng">
-                      {TOPIC_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
-                    </optgroup>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-2">Tên bài học</label>
-                  <input type="text" value={importTitle} onChange={e => setImportTitle(e.target.value)} placeholder="VD: Đồ dùng học tập" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold outline-none focus:ring-4 ring-indigo-50/50 focus:border-indigo-400 transition-all"/>
-                </div>
+                <select value={importLevel} onChange={e => setImportLevel(Number(e.target.value))} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold">
+                  {HSK_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
+                  {TOPIC_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
+                </select>
+                <input type="text" value={importTitle} onChange={e => setImportTitle(e.target.value)} placeholder="Tên bài học" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold"/>
               </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-2">Danh sách chữ Hán (Mỗi dòng một từ)</label>
-                <textarea 
-                  value={importText} 
-                  onChange={e => setImportText(e.target.value)} 
-                  className="w-full h-44 p-6 bg-slate-50 border border-slate-100 rounded-[2rem] font-chinese text-3xl outline-none focus:ring-4 ring-indigo-50/50 focus:border-indigo-400 transition-all resize-none shadow-inner" 
-                  placeholder="苹果&#10;西瓜&#10;香蕉"
-                />
-              </div>
+              <textarea value={importText} onChange={e => setImportText(e.target.value)} className="w-full h-44 p-6 bg-slate-50 border border-slate-100 rounded-[2rem] font-chinese text-3xl outline-none" placeholder="苹果&#10;西瓜"/>
             </div>
-
-            <div className="mt-12 flex items-center gap-4">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-5 font-black text-slate-400 hover:text-slate-600 transition-colors">Hủy bỏ</button>
-              <button 
-                onClick={handleImport} 
-                disabled={isProcessing} 
-                className="flex-[2] bg-indigo-600 text-white py-5 rounded-[2rem] font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-3"
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>AI đang phân tích...</span>
-                  </>
-                ) : (
-                  <span>Tạo bài học bằng AI</span>
-                )}
+            <div className="mt-12 flex gap-4">
+              <button onClick={() => setShowModal(false)} className="flex-1 py-5 font-black text-slate-400">Hủy</button>
+              <button onClick={handleImport} disabled={isProcessing} className="flex-[2] bg-indigo-600 text-white py-5 rounded-[2rem] font-black shadow-xl">
+                {isProcessing ? "AI Đang xử lý..." : "Xác nhận tạo"}
               </button>
             </div>
           </div>

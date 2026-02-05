@@ -6,7 +6,7 @@ export enum CategoryType {
 
 export interface VocabularyItem {
   id: string;
-  word: string; // Hanzi
+  word: string;
   pinyin: string;
   partOfSpeech: string;
   definitionVi: string;
@@ -21,24 +21,22 @@ export interface Lesson {
   number: number;
   title: string;
   description: string;
+  level?: number;
 }
 
 export interface Category {
   id: string;
   name: string;
   type: CategoryType;
-  level?: number;
+  level: number;
   icon: string;
 }
 
 export enum AppMode {
   HOME = 'HOME',
   LESSON_SELECT = 'LESSON_SELECT',
-  LOADING = 'LOADING',
   STUDY_MODE_SELECT = 'STUDY_MODE_SELECT',
   FLASHCARD = 'FLASHCARD',
   REVIEW = 'REVIEW',
-  SUMMARY = 'SUMMARY',
-  LISTENING_PRACTICE_SELECT = 'LISTENING_PRACTICE_SELECT',
-  LISTENING_PRACTICE = 'LISTENING_PRACTICE'
+  LISTENING = 'LISTENING'
 }
