@@ -206,10 +206,10 @@ const App: React.FC = () => {
           <div className="animate-in fade-in duration-700">
             <div className="text-center max-w-3xl mx-auto mb-20">
               <h1 className="text-5xl font-black tracking-tight text-gray-900 mb-6">
-                Kho Từ Vựng <span className="text-indigo-600">Cloud Sync</span>
+                Kho Từ Vựng <span className="text-indigo-600">Tự học tiếng Trung hiệu quả</span>
               </h1>
               <p className="text-xl text-gray-600 mb-10 leading-relaxed">
-                Dữ liệu được lưu trữ an toàn trên Supabase. <br/>Học mọi lúc, mọi nơi trên mọi thiết bị.
+                Học mọi lúc, mọi nơi trên mọi thiết bị.
               </p>
               <button 
                 onClick={openNewLessonModal}
