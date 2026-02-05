@@ -16,7 +16,23 @@ const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
  * AI phân tích danh sách chữ Hán và trả về bộ từ vựng đầy đủ
  */
 export const enrichVocabularyWithAI = async (rawWords: string): Promise<VocabularyItem[]> => {
-  const prompt = `Phân tích danh sách từ vựng Tiếng Trung sau: "${rawWords}". Trả về JSON array: word, pinyin, partOfSpeech, definitionVi, definitionEn, exampleZh, exampleVi.`;
+  // Tách các từ bằng xuống dòng hoặc phẩy để AI dễ xử lý
+  const wordsArray = rawWords.split(/[\n,，]+/).map(w => w.trim()).filter(w => w.length > 0);
+  if (wordsArray.length === 0) return [];
+
+  const prompt = `Bạn là một chuyên gia ngôn ngữ Tiếng Trung. Hãy phân tích danh sách từ vựng sau đây: ${wordsArray.join(', ')}.
+  
+  Đối với mỗi từ, hãy tạo một đối tượng JSON chứa:
+  - word: Chữ Hán gốc.
+  - pinyin: Phiên âm Pinyin có dấu.
+  - partOfSpeech: Loại từ (Danh từ, Động từ, Tính từ, v.v.).
+  - definitionVi: Nghĩa tiếng Việt chính xác.
+  - definitionEn: Nghĩa tiếng Anh.
+  - exampleZh: Một câu ví dụ tiếng Trung tự nhiên có chứa từ đó.
+  - exampleVi: Dịch câu ví dụ đó sang tiếng Việt.
+
+  Yêu cầu trả về một ARRAY JSON duy nhất.`;
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -41,8 +57,19 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
         },
       },
     });
-    const results = JSON.parse(response.text || "[]");
-    return results.map((item: any, idx: number) => ({ ...item, id: `${Date.now()}-${idx}` }));
+
+    const text = response.text || "[]";
+    const results = JSON.parse(text);
+    
+    if (!Array.isArray(results) || results.length === 0) {
+      console.error("AI returned empty or invalid array");
+      return [];
+    }
+
+    return results.map((item: any, idx: number) => ({ 
+      ...item, 
+      id: `${Date.now()}-${idx}` 
+    }));
   } catch (error) { 
     console.error("AI Enrichment Error:", error);
     return []; 
@@ -51,34 +78,36 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
 
 /**
  * Lưu bài học vào Database. 
- * Trả về { success: boolean, message?: string } để UI hiển thị lỗi rõ ràng.
  */
 export const saveCustomLesson = async (category: Category, lesson: Lesson, vocabulary: VocabularyItem[]) => {
   if (!supabase) {
-    return { success: false, message: "Supabase chưa được cấu hình. Vui lòng kiểm tra Environment Variables." };
+    return { success: false, message: "Supabase chưa được cấu hình. Hãy kiểm tra biến môi trường." };
   }
 
   try {
-    // Sử dụng ID số nguyên (Integer) vì đa số bảng DB mặc định kiểu này
-    const lessonId = Date.now();
-
-    // 1. Lưu vào bảng 'lessons'
-    const { error: lessonError } = await supabase.from('lessons').upsert({
-      id: lessonId,
-      level: Number(category.level),
-      number: Number(lesson.number),
-      title: String(lesson.title),
-      description: String(lesson.description || "")
-    });
+    // 1. Lưu vào bảng 'lessons' 
+    // Không gửi ID thủ công để tránh xung đột với cột Identity (Auto-increment)
+    const { data: lessonData, error: lessonError } = await supabase
+      .from('lessons')
+      .insert({
+        level: Number(category.level),
+        number: Number(lesson.number),
+        title: String(lesson.title),
+        description: String(lesson.description || "")
+      })
+      .select()
+      .single();
     
     if (lessonError) {
       console.error("Database Error (Lessons):", lessonError);
       return { success: false, message: `Lỗi bảng lessons: ${lessonError.message}` };
     }
 
+    const newLessonId = lessonData.id;
+
     // 2. Lưu vào bảng 'vocabulary'
     const vocabToInsert = vocabulary.map(v => ({
-      lesson_id: lessonId,
+      lesson_id: newLessonId,
       word: v.word,
       pinyin: v.pinyin,
       part_of_speech: v.partOfSpeech,
@@ -92,6 +121,8 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
     
     if (vocabError) {
       console.error("Database Error (Vocabulary):", vocabError);
+      // Rollback: Xóa bài học nếu không lưu được từ vựng
+      await supabase.from('lessons').delete().eq('id', newLessonId);
       return { success: false, message: `Lỗi bảng vocabulary: ${vocabError.message}` };
     }
     
