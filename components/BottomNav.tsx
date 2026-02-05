@@ -9,8 +9,16 @@ interface BottomNavProps {
 }
 
 const BottomNav: React.FC<BottomNavProps> = ({ currentMode, onHome, onReview }) => {
-  const isHomeActive = [AppMode.HOME, AppMode.LESSON_SELECT, AppMode.STUDY_MODE_SELECT, AppMode.FLASHCARD, AppMode.REVIEW].includes(currentMode);
-  const isReviewActive = [AppMode.LISTENING_PRACTICE_SELECT, AppMode.LISTENING_PRACTICE].includes(currentMode);
+  // Chỉ sử dụng các mode có trong enum AppMode tại types.ts
+  const isHomeActive = [
+    AppMode.HOME, 
+    AppMode.LESSON_SELECT, 
+    AppMode.STUDY_MODE_SELECT, 
+    AppMode.FLASHCARD, 
+    AppMode.REVIEW
+  ].includes(currentMode);
+  
+  const isReviewActive = [AppMode.LISTENING].includes(currentMode);
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 px-6 py-3 z-50 flex justify-around items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
