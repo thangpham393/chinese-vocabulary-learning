@@ -24,6 +24,11 @@ const App: React.FC = () => {
   const [importText, setImportText] = useState('');
   const [importLessonTitle, setImportLessonTitle] = useState('');
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  
+  // New state for modal category selection
+  const [modalCategoryId, setModalCategoryId] = useState<string>('hsk1');
+
+  const allCategories = [...HSK_CATEGORIES, ...TOPIC_CATEGORIES];
 
   useEffect(() => {
     getGlobalStats().then(setStats);
@@ -86,6 +91,7 @@ const App: React.FC = () => {
     setImportText(text);
     setImportLessonTitle(lesson.title);
     setEditingLessonId(lesson.id);
+    if (selectedCategory) setModalCategoryId(selectedCategory.id);
     setShowImportModal(true);
     setIsLoading(false);
   };
@@ -104,27 +110,41 @@ const App: React.FC = () => {
     setEditingLessonId(null);
     setImportText('');
     setImportLessonTitle('');
+    if (selectedCategory) setModalCategoryId(selectedCategory.id);
     setShowImportModal(true);
   };
 
   const handleSmartImport = async () => {
-    if (!importText.trim() || !importLessonTitle.trim() || !selectedCategory) return;
+    if (!importText.trim() || !importLessonTitle.trim()) return;
+    
+    const targetCategory = allCategories.find(c => c.id === modalCategoryId);
+    if (!targetCategory) return;
+
     setIsEnriching(true);
     const enrichedVocab = await enrichVocabularyWithAI(importText);
     if (enrichedVocab.length > 0) {
       const lessonId = editingLessonId || `lesson-${Date.now()}`;
+      // Logic for lesson number: if editing, keep same. If new, count existing + 1
+      const existingLesson = lessons.find(l => l.id === lessonId);
       const newLesson: Lesson = { 
         id: lessonId, 
-        number: lessons.find(l => l.id === lessonId)?.number || (lessons.length + 1), 
+        number: existingLesson?.number || (lessons.length + 1), 
         title: importLessonTitle, 
         description: `Học ${enrichedVocab.length} từ mới` 
       };
-      const success = await saveCustomLesson(selectedCategory, newLesson, enrichedVocab);
+      
+      const success = await saveCustomLesson(targetCategory, newLesson, enrichedVocab);
       if (success) {
-        await refreshLessons(selectedCategory);
-        setVocabList(enrichedVocab);
-        setSelectedLesson(newLesson);
-        setMode(AppMode.STUDY_MODE_SELECT);
+        // If the target category is the one we're currently viewing, refresh it
+        if (selectedCategory?.id === targetCategory.id) {
+          await refreshLessons(targetCategory);
+          setVocabList(enrichedVocab);
+          setSelectedLesson(newLesson);
+          setMode(AppMode.STUDY_MODE_SELECT);
+        } else {
+          // If added to different category, just go to that category
+          handleSelectCategory(targetCategory);
+        }
         setShowImportModal(false);
       }
     }
@@ -149,7 +169,7 @@ const App: React.FC = () => {
                   Làm chủ Tiếng Trung <br/><span className="text-indigo-600 italic">với Sức mạnh AI</span>
                 </h1>
                 <p className="text-lg sm:text-xl text-gray-500 mb-10 max-w-xl mx-auto lg:mx-0">Học từ vựng qua hình ảnh AI, luyện nghe với giọng đọc tự nhiên.</p>
-                <div className="flex flex-wrap gap-4 justify-center lg:justify-start">
+                <div className="flex flex-wrap gap-4 justify-center lg:justify-start items-center">
                   <div className="bg-white px-6 py-4 rounded-2xl shadow-sm border border-slate-100">
                     <div className="text-2xl font-black text-indigo-600">{stats.totalWords}</div>
                     <div className="text-xs font-bold text-slate-400 uppercase">Từ vựng</div>
@@ -158,6 +178,12 @@ const App: React.FC = () => {
                     <div className="text-2xl font-black text-indigo-600">{stats.totalLessons}</div>
                     <div className="text-xs font-bold text-slate-400 uppercase">Bài học</div>
                   </div>
+                  <button 
+                    onClick={handleOpenAddModal}
+                    className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
+                  >
+                    <span className="text-2xl">+</span> Tạo bài học mới
+                  </button>
                 </div>
               </div>
               <div className="hidden lg:grid flex-1 grid-cols-2 gap-4">
@@ -207,7 +233,12 @@ const App: React.FC = () => {
         {mode === AppMode.LESSON_SELECT && (
           <div className="animate-in slide-in-from-right-10 duration-500">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
-               <h2 className="text-3xl sm:text-4xl font-black">{selectedCategory?.name}</h2>
+               <div className="flex items-center gap-4">
+                 <button onClick={() => setMode(AppMode.HOME)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/></svg>
+                 </button>
+                 <h2 className="text-3xl sm:text-4xl font-black">{selectedCategory?.name}</h2>
+               </div>
                <div className="flex w-full md:w-auto gap-4">
                  <input 
                     type="text" placeholder="Tìm bài học..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
@@ -224,7 +255,6 @@ const App: React.FC = () => {
                         <h3 className="text-2xl font-black mb-2">{lesson.title}</h3>
                         <p className="text-slate-400">{lesson.description}</p>
                     </button>
-                    {/* Action buttons (only for custom lessons - not static ones if applicable) */}
                     <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={(e) => handleEditLesson(e, lesson)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors" title="Sửa bài học">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -270,13 +300,50 @@ const App: React.FC = () => {
 
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-xl p-10 shadow-2xl animate-in zoom-in">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-xl p-8 sm:p-10 shadow-2xl animate-in zoom-in overflow-y-auto max-h-[95vh]">
             <h3 className="text-3xl font-black mb-8">{editingLessonId ? 'Cập nhật bài học' : 'Thêm bài học mới'}</h3>
-            <input type="text" placeholder="Tên bài học" value={importLessonTitle} onChange={(e) => setImportLessonTitle(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl mb-6 focus:border-indigo-500 outline-none font-bold"/>
-            <textarea placeholder="Nhập danh sách chữ Hán..." value={importText} onChange={(e) => setImportText(e.target.value)} className="w-full h-48 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl mb-8 focus:border-indigo-500 outline-none font-chinese text-2xl resize-none"/>
-            <div className="flex gap-4">
-              <button onClick={() => setShowImportModal(false)} className="flex-1 py-4 font-bold text-slate-400">Hủy</button>
-              <button onClick={handleSmartImport} disabled={isEnriching} className="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg disabled:opacity-50">{isEnriching ? 'AI đang xử lý...' : editingLessonId ? 'Cập nhật' : 'Xác nhận'}</button>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Chọn cấp độ / Chủ đề</label>
+                <select 
+                  value={modalCategoryId}
+                  onChange={(e) => setModalCategoryId(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none font-bold"
+                >
+                  <optgroup label="Lộ trình HSK">
+                    {HSK_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                  </optgroup>
+                  <optgroup label="Chủ đề phổ biến">
+                    {TOPIC_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Tên bài học</label>
+                <input type="text" placeholder="Ví dụ: Từ vựng Gia đình" value={importLessonTitle} onChange={(e) => setImportLessonTitle(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none font-bold"/>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Danh sách từ vựng (Chữ Hán)</label>
+                <textarea placeholder="Nhập mỗi từ một dòng (Ví dụ: 爸爸, 妈妈...)" value={importText} onChange={(e) => setImportText(e.target.value)} className="w-full h-32 sm:h-48 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none font-chinese text-2xl resize-none"/>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button onClick={() => setShowImportModal(false)} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 transition-colors">Hủy</button>
+              <button onClick={handleSmartImport} disabled={isEnriching} className="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 transition-all">
+                {isEnriching ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    AI đang xử lý...
+                  </span>
+                ) : editingLessonId ? 'Cập nhật ngay' : 'Xác nhận tạo bài'}
+              </button>
             </div>
           </div>
         </div>
