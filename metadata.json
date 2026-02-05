@@ -1,0 +1,7 @@
+{
+  "name": "Zhongwen Master - Chinese Vocabulary Learning",
+  "description": "A comprehensive Chinese vocabulary learning app focusing on HSK levels 1-6 and thematic topics, featuring AI-generated illustrations and interactive review sessions.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
