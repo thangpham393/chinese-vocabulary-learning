@@ -47,7 +47,7 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
     const results = JSON.parse(response.text || "[]");
     return results.map((item: any, idx: number) => ({
       ...item,
-      id: `custom-${Date.now()}-${idx}`,
+      id: `v-${Date.now()}-${idx}`,
     }));
   } catch (error) {
     console.error("Gemini Error:", error);
@@ -56,55 +56,55 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
 };
 
 export const saveCustomLesson = async (category: Category, lesson: Lesson, vocabulary: VocabularyItem[]) => {
-  if (!supabase) {
-    console.error("Supabase client not initialized. Check your environment variables.");
-    return false;
-  }
+  if (!supabase) return false;
   
   try {
-    // 1. Lưu/Cập nhật Lesson
+    // Đảm bảo dữ liệu sạch và đúng kiểu
+    const lessonData = {
+      id: lesson.id,
+      level: category.level ? Number(category.level) : null,
+      category_id: String(category.id),
+      number: Number(lesson.number),
+      title: String(lesson.title),
+      description: String(lesson.description || "")
+    };
+
+    console.log("Upserting lesson:", lessonData);
+
     const { error: lessonError } = await supabase
       .from('lessons')
-      .upsert({
-        id: lesson.id,
-        level: category.level || null,
-        category_id: category.id,
-        number: Number(lesson.number) || 0,
-        title: lesson.title,
-        description: lesson.description || ""
-      });
+      .upsert(lessonData);
     
     if (lessonError) {
-      console.error("Supabase Lesson Error (400?):", lessonError);
+      console.error("Supabase Lesson Error Detail:", JSON.stringify(lessonError));
       throw lessonError;
     }
 
-    // 2. Xóa từ vựng cũ nếu đang edit
+    // Xóa từ vựng cũ
     await supabase.from('vocabulary').delete().eq('lesson_id', lesson.id);
 
-    // 3. Thêm từ vựng mới
+    // Chuẩn bị từ vựng mới
     const vocabToInsert = vocabulary.map(v => ({
-      id: v.id || `v-${Date.now()}-${Math.random()}`,
       lesson_id: lesson.id,
-      word: v.word,
-      pinyin: v.pinyin || "",
-      part_of_speech: v.partOfSpeech || "n.",
-      definition_vi: v.definitionVi || "",
-      definition_en: v.definitionEn || "",
-      example_zh: v.exampleZh || "",
-      example_vi: v.exampleVi || "",
+      word: String(v.word),
+      pinyin: String(v.pinyin || ""),
+      part_of_speech: String(v.partOfSpeech || ""),
+      definition_vi: String(v.definitionVi || ""),
+      definition_en: String(v.definitionEn || ""),
+      example_zh: String(v.exampleZh || ""),
+      example_vi: String(v.exampleVi || ""),
       image_url: v.imageUrl || null
     }));
 
     const { error: vocabError } = await supabase.from('vocabulary').insert(vocabToInsert);
     if (vocabError) {
-      console.error("Supabase Vocab Error:", vocabError);
+      console.error("Supabase Vocab Error Detail:", JSON.stringify(vocabError));
       throw vocabError;
     }
     
     return true;
   } catch (e) { 
-    console.error("General Save Error:", e);
+    console.error("Detailed Save Error:", e);
     return false; 
   }
 };
