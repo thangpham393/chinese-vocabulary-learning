@@ -2,28 +2,45 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { VocabularyItem, Lesson, Category } from "../types";
-import { HSK_STATIC_LESSONS, HSK_STATIC_VOCABULARY } from "../data/hskData";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
 
 const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
+// --- LOCAL STORAGE FALLBACK LOGIC ---
+const getLocalLessons = (level: number): Lesson[] => {
+  const data = localStorage.getItem(`lessons_${level}`);
+  return data ? JSON.parse(data) : [];
+};
+
+const saveLocalLesson = (level: number, lesson: Lesson) => {
+  const current = getLocalLessons(level);
+  localStorage.setItem(`lessons_${level}`, JSON.stringify([...current, lesson]));
+};
+
+const getLocalVocab = (lessonId: string | number): VocabularyItem[] => {
+  const data = localStorage.getItem(`vocab_${lessonId}`);
+  return data ? JSON.parse(data) : [];
+};
+
+const saveLocalVocab = (lessonId: string | number, vocab: VocabularyItem[]) => {
+  localStorage.setItem(`vocab_${lessonId}`, JSON.stringify(vocab));
+};
+
 /**
- * AI phân tích danh sách chữ Hán và trả về bộ từ vựng đầy đủ
+ * AI phân tích danh sách từ vựng
  */
 export const enrichVocabularyWithAI = async (rawWords: string): Promise<VocabularyItem[]> => {
   const wordsArray = rawWords.split(/[\n,，]+/).map(w => w.trim()).filter(w => w.length > 0);
   if (wordsArray.length === 0) return [];
 
-  const prompt = `Phân tích các từ vựng Tiếng Trung sau: ${wordsArray.join(', ')}. 
-  Trả về một mảng JSON các đối tượng gồm: word, pinyin, partOfSpeech, definitionVi, definitionEn, exampleZh, exampleVi.
-  Yêu cầu:
-  1. Chỉ trả về JSON, không thêm văn bản khác.
-  2. Nghĩa tiếng Việt phải tự nhiên, ví dụ phải thực tế.`;
+  const prompt = `Bạn là chuyên gia ngôn ngữ. Hãy phân tích các từ Tiếng Trung này: ${wordsArray.join(', ')}.
+  Trả về một mảng JSON các đối tượng. Mỗi đối tượng có: word, pinyin, partOfSpeech, definitionVi, definitionEn, exampleZh, exampleVi.
+  Yêu cầu: Không giải thích, chỉ trả về JSON.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -50,99 +67,86 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
       },
     });
 
-    const text = response.text || "[]";
-    const results = JSON.parse(text);
-    return results.map((item: any, idx: number) => ({ ...item, id: `${Date.now()}-${idx}` }));
-  } catch (error) { 
-    console.error("AI Enrichment Error:", error);
-    return []; 
+    const results = JSON.parse(response.text || "[]");
+    return results.map((item: any, idx: number) => ({
+      ...item,
+      id: `${Date.now()}-${idx}`
+    }));
+  } catch (error) {
+    console.error("AI Error:", error);
+    throw new Error("AI gặp sự cố khi xử lý dữ liệu.");
   }
 };
 
 /**
- * Lưu bài học vào Database.
- * CỐ ĐỊNH LỖI: Tự tạo ID cho Lesson thay vì để DB tự tạo (phòng trường hợp DB chưa bật Identity).
+ * Lưu bài học (Hybrid: Supabase -> LocalStorage)
  */
 export const saveCustomLesson = async (category: Category, lesson: Lesson, vocabulary: VocabularyItem[]) => {
-  if (!supabase) {
-    return { success: false, message: "Supabase chưa được cấu hình." };
-  }
+  const lessonId = Date.now();
+  const newLesson = { ...lesson, id: String(lessonId), level: category.level };
 
-  try {
-    // Tự tạo một ID số nguyên duy nhất từ timestamp
-    const generatedLessonId = Date.now();
-
-    // 1. Lưu vào bảng 'lessons' - Gửi kèm ID để tránh lỗi null constraint
-    const { error: lessonError } = await supabase
-      .from('lessons')
-      .insert({
-        id: generatedLessonId, 
-        level: Number(category.level),
-        number: Number(lesson.number),
-        title: String(lesson.title),
-        description: String(lesson.description || "")
+  if (supabase) {
+    try {
+      const { error: lErr } = await supabase.from('lessons').insert({
+        id: lessonId,
+        level: category.level,
+        number: lesson.number,
+        title: lesson.title,
+        description: lesson.description
       });
-    
-    if (lessonError) {
-      console.error("Database Error (Lessons):", lessonError);
-      return { success: false, message: `Lỗi bảng lessons: ${lessonError.message}` };
-    }
+      if (lErr) throw lErr;
 
-    // 2. Lưu vào bảng 'vocabulary'
-    const vocabToInsert = vocabulary.map(v => ({
-      lesson_id: generatedLessonId,
-      word: v.word,
-      pinyin: v.pinyin,
-      part_of_speech: v.partOfSpeech,
-      definition_vi: v.definitionVi,
-      definition_en: v.definitionEn,
-      example_zh: v.exampleZh,
-      example_vi: v.exampleVi
-    }));
+      const vocabData = vocabulary.map(v => ({
+        lesson_id: lessonId,
+        word: v.word,
+        pinyin: v.pinyin,
+        part_of_speech: v.partOfSpeech,
+        definition_vi: v.definitionVi,
+        definition_en: v.definitionEn,
+        example_zh: v.exampleZh,
+        example_vi: v.exampleVi
+      }));
 
-    const { error: vocabError } = await supabase.from('vocabulary').insert(vocabToInsert);
-    
-    if (vocabError) {
-      console.error("Database Error (Vocabulary):", vocabError);
-      // Xóa bài học vừa tạo nếu lưu từ vựng thất bại
-      await supabase.from('lessons').delete().eq('id', generatedLessonId);
-      return { success: false, message: `Lỗi bảng vocabulary: ${vocabError.message}` };
+      const { error: vErr } = await supabase.from('vocabulary').insert(vocabData);
+      if (vErr) throw vErr;
+      
+      return true;
+    } catch (err) {
+      console.warn("Supabase insert failed, falling back to LocalStorage", err);
     }
-    
-    return { success: true };
-  } catch (e: any) {
-    console.error("Critical System Error:", e);
-    return { success: false, message: e.message || "Lỗi hệ thống." };
   }
+
+  // Fallback to local storage
+  saveLocalLesson(category.level, newLesson);
+  saveLocalVocab(lessonId, vocabulary);
+  return true;
 };
 
-export const fetchLessonsByCategory = async (category: Category): Promise<Lesson[]> => {
-  const staticData = (category.level && HSK_STATIC_LESSONS[category.level]) ? HSK_STATIC_LESSONS[category.level] : [];
-  if (!supabase) return staticData;
-  const { data, error } = await supabase.from('lessons').select('*').eq('level', category.level).order('number', { ascending: true });
-  if (error) return staticData;
-  return [...staticData, ...(data || [])];
+export const fetchLessons = async (level: number): Promise<Lesson[]> => {
+  let dbLessons: Lesson[] = [];
+  if (supabase) {
+    const { data } = await supabase.from('lessons').select('*').eq('level', level).order('number');
+    dbLessons = data || [];
+  }
+  const localLessons = getLocalLessons(level);
+  return [...dbLessons, ...localLessons];
 };
 
-export const fetchVocabularyForLesson = async (lesson: Lesson): Promise<VocabularyItem[]> => {
-  if (HSK_STATIC_VOCABULARY[lesson.id]) return HSK_STATIC_VOCABULARY[lesson.id];
-  if (!supabase) return [];
-  const { data } = await supabase.from('vocabulary').select('*').eq('lesson_id', lesson.id);
-  return (data || []).map(item => ({
-    id: String(item.id), word: item.word, pinyin: item.pinyin, partOfSpeech: item.part_of_speech,
-    definitionVi: item.definition_vi, definitionEn: item.definition_en,
-    exampleZh: item.example_zh, exampleVi: item.example_vi
-  }));
+export const fetchVocab = async (lessonId: string | number): Promise<VocabularyItem[]> => {
+  if (supabase) {
+    const { data } = await supabase.from('vocabulary').select('*').eq('lesson_id', lessonId);
+    if (data && data.length > 0) {
+      return data.map(d => ({
+        id: String(d.id), word: d.word, pinyin: d.pinyin, partOfSpeech: d.part_of_speech,
+        definitionVi: d.definition_vi, definitionEn: d.definition_en,
+        exampleZh: d.example_zh, exampleVi: d.example_vi
+      }));
+    }
+  }
+  return getLocalVocab(lessonId);
 };
 
-export const getGlobalStats = async () => {
-  if (!supabase) return { totalWords: 0, totalLessons: 0 };
-  const { count: v } = await supabase.from('vocabulary').select('*', { count: 'exact', head: true });
-  const { count: l } = await supabase.from('lessons').select('*', { count: 'exact', head: true });
-  return { totalWords: v || 0, totalLessons: l || 0 };
-};
-
-export const speakText = async (text: string, speed: number = 1.0) => {
+export const speak = async (text: string, rate: number = 1.0) => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -162,19 +166,21 @@ export const speakText = async (text: string, speed: number = 1.0) => {
       const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
       buffer.getChannelData(0).set(Array.from(dataInt16).map(v => v / 32768));
       const src = ctx.createBufferSource();
-      src.buffer = buffer; src.playbackRate.value = speed;
-      src.connect(ctx.destination); src.start();
+      src.buffer = buffer;
+      src.playbackRate.value = rate;
+      src.connect(ctx.destination);
+      src.start();
     }
   } catch (e) {}
 };
 
-export const generateImageForWord = async (word: string, definition: string): Promise<string | undefined> => {
+export const genImage = async (word: string): Promise<string | undefined> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
-      contents: { parts: [{ text: `Minimalist educational illustration for "${word}" (${definition})` }] },
+      contents: { parts: [{ text: `High-quality educational 3D render of "${word}" for language learning, isolated on white background` }] },
     });
-    const base64 = response.candidates[0].content.parts.find(p => p.inlineData)?.inlineData?.data;
-    return base64 ? `data:image/png;base64,${base64}` : undefined;
+    const part = response.candidates[0].content.parts.find(p => p.inlineData);
+    return part ? `data:image/png;base64,${part.inlineData.data}` : undefined;
   } catch (e) { return undefined; }
 };
