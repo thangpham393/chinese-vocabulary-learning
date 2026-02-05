@@ -95,7 +95,7 @@ const App: React.FC = () => {
   const handleDeleteLesson = async (e: React.MouseEvent, lesson: Lesson) => {
     e.stopPropagation();
     if (confirm(`Bạn có chắc chắn muốn xóa bài học "${lesson.title}" không?`)) {
-      deleteCustomLesson(selectedCategory?.level || 1, lesson.id);
+      await deleteCustomLesson(selectedCategory?.level || 1, lesson.id);
       await refreshLessons(selectedCategory?.level || 1);
     }
   };
@@ -137,31 +137,31 @@ const App: React.FC = () => {
     try {
       const enrichedVocab = await enrichVocabularyWithAI(importText);
       if (enrichedVocab.length > 0) {
+        const lessonId = editingLessonId || `custom-hsk${importHskLevel}-l${importLessonNum}-${Date.now()}`;
         const newLesson: Lesson = {
-          id: editingLessonId || `custom-hsk${importHskLevel}-l${importLessonNum}-${Date.now()}`,
+          id: lessonId,
           number: importLessonNum,
           title: importLessonTitle,
           description: `${editingLessonId ? 'Đã chỉnh sửa' : 'Tự nhập'} (${enrichedVocab.length} từ)`
         };
 
-        saveCustomLesson(importHskLevel, newLesson, enrichedVocab);
+        const success = await saveCustomLesson(importHskLevel, newLesson, enrichedVocab);
         
-        // Nếu đang ở màn hình Lesson Select thì cập nhật danh sách
-        if (selectedCategory?.level === importHskLevel) {
-          await refreshLessons(importHskLevel);
+        if (success) {
+          if (selectedCategory?.level === importHskLevel) {
+            await refreshLessons(importHskLevel);
+          }
+          setVocabList(enrichedVocab);
+          setSelectedCategory(HSK_CATEGORIES.find(c => c.level === importHskLevel) || null);
+          setSelectedLesson(newLesson);
+          setMode(AppMode.STUDY_MODE_SELECT);
+          setShowImportModal(false);
+          setEditingLessonId(null);
+          setImportText('');
+          setImportLessonTitle('');
+        } else {
+          alert("Lỗi khi lưu vào Supabase.");
         }
-
-        // Tự động chuyển đến màn hình chọn mode học
-        setVocabList(enrichedVocab);
-        setSelectedCategory(HSK_CATEGORIES.find(c => c.level === importHskLevel) || null);
-        setSelectedLesson(newLesson);
-        setMode(AppMode.STUDY_MODE_SELECT);
-        setShowImportModal(false);
-        
-        // Clear form
-        setEditingLessonId(null);
-        setImportText('');
-        setImportLessonTitle('');
       } else {
         alert("AI không nhận diện được từ vựng. Hãy thử lại.");
       }
@@ -206,10 +206,10 @@ const App: React.FC = () => {
           <div className="animate-in fade-in duration-700">
             <div className="text-center max-w-3xl mx-auto mb-20">
               <h1 className="text-5xl font-black tracking-tight text-gray-900 mb-6">
-                Kho Từ Vựng <span className="text-indigo-600">Của Bạn</span>
+                Kho Từ Vựng <span className="text-indigo-600">Cloud Sync</span>
               </h1>
               <p className="text-xl text-gray-600 mb-10 leading-relaxed">
-                Tự xây dựng lộ trình HSK cá nhân. Nhập chữ Hán, <br/>AI sẽ lo phần còn lại.
+                Dữ liệu được lưu trữ an toàn trên Supabase. <br/>Học mọi lúc, mọi nơi trên mọi thiết bị.
               </p>
               <button 
                 onClick={openNewLessonModal}
@@ -237,7 +237,7 @@ const App: React.FC = () => {
            <div className="animate-in slide-in-from-bottom-10 duration-500">
              <div className="text-center mb-16">
                <h2 className="text-4xl font-black mb-4">Luyện nghe & Gõ phím</h2>
-               <p className="text-slate-500">Chọn cấp độ HSK bạn muốn ôn tập câu văn ngẫu nhiên</p>
+               <p className="text-slate-500">Dữ liệu lấy trực tiếp từ database Supabase của bạn</p>
              </div>
              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
                {HSK_CATEGORIES.map(cat => (
@@ -428,7 +428,7 @@ const App: React.FC = () => {
                {selectedCategory?.name} - Bài {selectedLesson?.number}
             </div>
             <h2 className="text-5xl font-black text-slate-900 mb-4 tracking-tight">{selectedLesson?.title}</h2>
-            <p className="text-slate-500 text-lg mb-16">Nội dung đã sẵn sàng. Bạn muốn bắt đầu như thế nào?</p>
+            <p className="text-slate-500 text-lg mb-16">Dữ liệu từ Cloud. Bạn muốn bắt đầu học như thế nào?</p>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
               <button 
@@ -437,7 +437,7 @@ const App: React.FC = () => {
               >
                 <div className="text-7xl mb-8 group-hover:scale-110 transition-transform">📇</div>
                 <h3 className="text-3xl font-black mb-3">Thẻ nhớ</h3>
-                <p className="text-slate-400 font-medium">Học thuộc mặt chữ và pinyin qua Flashcards.</p>
+                <p className="text-slate-400 font-medium">Đồng bộ đám mây.</p>
               </button>
               <button 
                 onClick={() => startStudy('REVIEW')}
@@ -445,7 +445,7 @@ const App: React.FC = () => {
               >
                 <div className="text-7xl mb-8 group-hover:scale-110 transition-transform">✍️</div>
                 <h3 className="text-3xl font-black mb-3">Kiểm tra</h3>
-                <p className="text-slate-400 font-medium">Thử thách ghi nhớ bằng cách gõ lại chữ Hán.</p>
+                <p className="text-slate-400 font-medium">Gõ chữ Hán.</p>
               </button>
             </div>
           </div>
@@ -456,7 +456,7 @@ const App: React.FC = () => {
         {mode === AppMode.LOADING && (
           <div className="flex flex-col items-center justify-center min-h-[60vh]">
             <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-8"></div>
-            <p className="text-slate-400 font-black text-xl animate-pulse tracking-wide uppercase">Đang tải...</p>
+            <p className="text-slate-400 font-black text-xl animate-pulse tracking-wide uppercase">Đang đồng bộ Cloud...</p>
           </div>
         )}
         

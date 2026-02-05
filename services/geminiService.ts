@@ -1,29 +1,28 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { VocabularyItem, Lesson } from "../types";
 import { HSK_STATIC_LESSONS, HSK_STATIC_VOCABULARY } from "../data/hskData";
 
+// Khởi tạo Gemini AI
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const STORAGE_KEYS = {
-  CUSTOM_LESSONS: (level: number) => `zw_v2_hsk_${level}_lessons`,
-  VOCAB: (lessonId: string) => `zw_v2_vocab_${lessonId}`,
-  IMAGE_CACHE: 'zw_v2_image_cache'
-};
+// Khởi tạo Supabase Client an toàn
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-const saveToCache = (key: string, data: any) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
-    console.warn("LocalStorage error", e);
-  }
-};
+// Chỉ tạo client nếu có đủ tham số, tránh lỗi "supabaseUrl is required"
+const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
 
-const getFromCache = (key: string) => {
-  const cached = localStorage.getItem(key);
-  return cached ? JSON.parse(cached) : null;
-};
+if (!supabase) {
+  console.warn("Supabase configuration missing. App will run in static mode using local data.");
+}
 
+const IMAGE_CACHE_KEY = 'zw_v2_image_cache';
+
+// AI Enrichment Logic
 export const enrichVocabularyWithAI = async (rawWords: string): Promise<VocabularyItem[]> => {
   const prompt = `Bạn là một chuyên gia từ điển Tiếng Trung - Việt. 
   Tôi có danh sách các từ vựng sau: "${rawWords}"
@@ -77,42 +76,119 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
   }
 };
 
-export const saveCustomLesson = (level: number, lesson: Lesson, vocabulary: VocabularyItem[]) => {
-  const lessons = getFromCache(STORAGE_KEYS.CUSTOM_LESSONS(level)) || [];
-  
-  const existingIdx = lessons.findIndex((l: Lesson) => l.id === lesson.id);
-  if (existingIdx >= 0) {
-    lessons[existingIdx] = lesson;
-  } else {
-    lessons.push(lesson);
+// Supabase Storage Logic
+export const saveCustomLesson = async (level: number, lesson: Lesson, vocabulary: VocabularyItem[]) => {
+  if (!supabase) {
+    alert("Không thể lưu: Thiếu cấu hình Supabase.");
+    return false;
   }
-  
-  lessons.sort((a: Lesson, b: Lesson) => a.number - b.number);
-  
-  saveToCache(STORAGE_KEYS.CUSTOM_LESSONS(level), lessons);
-  saveToCache(STORAGE_KEYS.VOCAB(lesson.id), vocabulary);
+
+  try {
+    // 1. Lưu bài học (Upsert)
+    const { error: lessonError } = await supabase
+      .from('lessons')
+      .upsert({
+        id: lesson.id,
+        level: level,
+        number: lesson.number,
+        title: lesson.title,
+        description: lesson.description
+      });
+
+    if (lessonError) throw lessonError;
+
+    // 2. Lưu từ vựng (Xóa cũ, thêm mới để đồng bộ)
+    await supabase.from('vocabulary').delete().eq('lesson_id', lesson.id);
+    
+    const vocabToInsert = vocabulary.map(v => ({
+      id: v.id,
+      lesson_id: lesson.id,
+      word: v.word,
+      pinyin: v.pinyin,
+      part_of_speech: v.partOfSpeech,
+      definition_vi: v.definitionVi,
+      definition_en: v.definitionEn,
+      example_zh: v.exampleZh,
+      example_vi: v.exampleVi,
+      image_url: v.imageUrl
+    }));
+
+    const { error: vocabError } = await supabase
+      .from('vocabulary')
+      .insert(vocabToInsert);
+
+    if (vocabError) throw vocabError;
+    
+    return true;
+  } catch (error) {
+    console.error("Supabase Save Error:", error);
+    return false;
+  }
 };
 
-export const deleteCustomLesson = (level: number, lessonId: string) => {
-  const lessons = getFromCache(STORAGE_KEYS.CUSTOM_LESSONS(level)) || [];
-  const filtered = lessons.filter((l: Lesson) => l.id !== lessonId);
-  saveToCache(STORAGE_KEYS.CUSTOM_LESSONS(level), filtered);
-  localStorage.removeItem(STORAGE_KEYS.VOCAB(lessonId));
+export const deleteCustomLesson = async (level: number, lessonId: string) => {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from('lessons')
+    .delete()
+    .eq('id', lessonId);
+  
+  if (error) console.error("Delete error:", error);
 };
 
 export const fetchLessonsForHSK = async (level: number): Promise<Lesson[]> => {
-  const custom = getFromCache(STORAGE_KEYS.CUSTOM_LESSONS(level)) || [];
   const staticData = HSK_STATIC_LESSONS[level] || [];
-  return [...staticData, ...custom].sort((a, b) => a.number - b.number);
+  
+  if (!supabase) return staticData;
+
+  const { data, error } = await supabase
+    .from('lessons')
+    .select('*')
+    .eq('level', level)
+    .order('number', { ascending: true });
+
+  if (error) {
+    console.error("Fetch Lessons Error:", error);
+    return staticData;
+  }
+
+  return [...staticData, ...data].sort((a, b) => a.number - b.number);
 };
 
 export const fetchVocabularyForLesson = async (level: number, lesson: Lesson): Promise<VocabularyItem[]> => {
+  // Ưu tiên dữ liệu tĩnh nếu có
   if (HSK_STATIC_VOCABULARY[lesson.id]) return HSK_STATIC_VOCABULARY[lesson.id];
-  return getFromCache(STORAGE_KEYS.VOCAB(lesson.id)) || [];
+
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('vocabulary')
+    .select('*')
+    .eq('lesson_id', lesson.id);
+
+  if (error || !data) {
+    console.error("Fetch Vocab Error:", error);
+    return [];
+  }
+
+  // Map lại data từ snake_case sang camelCase
+  return data.map(item => ({
+    id: item.id,
+    word: item.word,
+    pinyin: item.pinyin,
+    partOfSpeech: item.part_of_speech,
+    definitionVi: item.definition_vi,
+    definitionEn: item.definition_en,
+    exampleZh: item.example_zh,
+    exampleVi: item.example_vi,
+    imageUrl: item.image_url
+  }));
 };
 
 export const generateImageForWord = async (word: string, definition: string): Promise<string | undefined> => {
-  const imgCache = getFromCache(STORAGE_KEYS.IMAGE_CACHE) || {};
+  const cached = localStorage.getItem(IMAGE_CACHE_KEY);
+  const imgCache = cached ? JSON.parse(cached) : {};
+  
   if (imgCache[word]) return imgCache[word];
 
   try {
@@ -126,7 +202,7 @@ export const generateImageForWord = async (word: string, definition: string): Pr
       if (part.inlineData) {
         const base64 = `data:image/png;base64,${part.inlineData.data}`;
         imgCache[word] = base64;
-        saveToCache(STORAGE_KEYS.IMAGE_CACHE, imgCache);
+        localStorage.setItem(IMAGE_CACHE_KEY, JSON.stringify(imgCache));
         return base64;
       }
     }
@@ -174,7 +250,7 @@ export const speakText = async (text: string) => {
         responseModalities: ['AUDIO'],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Kore là giọng nữ tự nhiên
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
         },
       },
