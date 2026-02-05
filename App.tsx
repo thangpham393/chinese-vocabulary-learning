@@ -8,7 +8,7 @@ import FlashcardStudy from './components/FlashcardStudy';
 import ListeningPractice from './components/ListeningPractice';
 import { HSK_CATEGORIES, TOPIC_CATEGORIES } from './constants';
 import { Category, VocabularyItem, Lesson, AppMode } from './types';
-import { fetchLessonsByCategory, fetchVocabularyForLesson, enrichVocabularyWithAI, saveCustomLesson, getGlobalStats } from './services/geminiService';
+import { fetchLessonsByCategory, fetchVocabularyForLesson, enrichVocabularyWithAI, saveCustomLesson, getGlobalStats, deleteCustomLesson } from './services/geminiService';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.HOME);
@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [importLessonTitle, setImportLessonTitle] = useState('');
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
 
   useEffect(() => {
     getGlobalStats().then(setStats);
@@ -77,13 +78,47 @@ const App: React.FC = () => {
     setIsLoading(false);
   };
 
+  const handleEditLesson = async (e: React.MouseEvent, lesson: Lesson) => {
+    e.stopPropagation();
+    setIsLoading(true);
+    const items = await fetchVocabularyForLesson(lesson);
+    const text = items.map(v => v.word).join('\n');
+    setImportText(text);
+    setImportLessonTitle(lesson.title);
+    setEditingLessonId(lesson.id);
+    setShowImportModal(true);
+    setIsLoading(false);
+  };
+
+  const handleDeleteLesson = async (e: React.MouseEvent, lessonId: string) => {
+    e.stopPropagation();
+    if (!window.confirm("Bạn có chắc chắn muốn xóa bài học này? Tất cả từ vựng trong bài cũng sẽ bị xóa.")) return;
+    const success = await deleteCustomLesson(lessonId);
+    if (success && selectedCategory) {
+      await refreshLessons(selectedCategory);
+      getGlobalStats().then(setStats);
+    }
+  };
+
+  const handleOpenAddModal = () => {
+    setEditingLessonId(null);
+    setImportText('');
+    setImportLessonTitle('');
+    setShowImportModal(true);
+  };
+
   const handleSmartImport = async () => {
     if (!importText.trim() || !importLessonTitle.trim() || !selectedCategory) return;
     setIsEnriching(true);
     const enrichedVocab = await enrichVocabularyWithAI(importText);
     if (enrichedVocab.length > 0) {
-      const lessonId = `lesson-${Date.now()}`;
-      const newLesson: Lesson = { id: lessonId, number: lessons.length + 1, title: importLessonTitle, description: `Học ${enrichedVocab.length} từ mới` };
+      const lessonId = editingLessonId || `lesson-${Date.now()}`;
+      const newLesson: Lesson = { 
+        id: lessonId, 
+        number: lessons.find(l => l.id === lessonId)?.number || (lessons.length + 1), 
+        title: importLessonTitle, 
+        description: `Học ${enrichedVocab.length} từ mới` 
+      };
       const success = await saveCustomLesson(selectedCategory, newLesson, enrichedVocab);
       if (success) {
         await refreshLessons(selectedCategory);
@@ -178,17 +213,33 @@ const App: React.FC = () => {
                     type="text" placeholder="Tìm bài học..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                     className="flex-1 md:w-64 px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none"
                  />
-                 <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold">Thêm</button>
+                 <button onClick={handleOpenAddModal} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">+ Thêm</button>
                </div>
              </div>
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
                {filteredLessons.map(lesson => (
-                 <button key={lesson.id} onClick={() => handleSelectLesson(lesson)} className="bg-white p-8 rounded-[2rem] border-2 border-slate-50 hover:border-indigo-500 hover:shadow-xl transition-all text-left">
-                    <div className="text-indigo-600 font-black text-sm mb-2">BÀI {lesson.number}</div>
-                    <h3 className="text-2xl font-black mb-2">{lesson.title}</h3>
-                    <p className="text-slate-400">{lesson.description}</p>
-                 </button>
+                 <div key={lesson.id} className="group relative">
+                    <button onClick={() => handleSelectLesson(lesson)} className="w-full bg-white p-8 rounded-[2rem] border-2 border-slate-50 hover:border-indigo-500 hover:shadow-xl transition-all text-left">
+                        <div className="text-indigo-600 font-black text-sm mb-2">BÀI {lesson.number}</div>
+                        <h3 className="text-2xl font-black mb-2">{lesson.title}</h3>
+                        <p className="text-slate-400">{lesson.description}</p>
+                    </button>
+                    {/* Action buttons (only for custom lessons - not static ones if applicable) */}
+                    <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => handleEditLesson(e, lesson)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors" title="Sửa bài học">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                      </button>
+                      <button onClick={(e) => handleDeleteLesson(e, lesson.id)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors" title="Xóa bài học">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                      </button>
+                    </div>
+                 </div>
                ))}
+               {filteredLessons.length === 0 && (
+                 <div className="col-span-full py-20 text-center bg-white rounded-3xl border-2 border-dashed border-slate-100 text-slate-400 font-bold">
+                    Không tìm thấy bài học nào.
+                 </div>
+               )}
              </div>
           </div>
         )}
@@ -212,7 +263,7 @@ const App: React.FC = () => {
         {mode === AppMode.FLASHCARD && <FlashcardStudy items={vocabList} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} onFinish={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
         {mode === AppMode.REVIEW && <ReviewSession items={vocabList} onComplete={() => setMode(AppMode.HOME)} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
         {mode === AppMode.LISTENING_PRACTICE && <ListeningPractice level={selectedCategory?.level || 0} allVocab={vocabList} onExit={() => setMode(AppMode.LISTENING_PRACTICE_SELECT)} />}
-        {mode === AppMode.LOADING && <div className="flex flex-col items-center justify-center py-40"><div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>}
+        {mode === AppMode.LOADING && <div className="flex flex-col items-center justify-center py-40"><div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div><p className="mt-4 text-slate-400 font-bold">Đang xử lý dữ liệu...</p></div>}
       </main>
 
       <BottomNav currentMode={mode} onHome={() => setMode(AppMode.HOME)} onReview={() => setMode(AppMode.LISTENING_PRACTICE_SELECT)} />
@@ -220,12 +271,12 @@ const App: React.FC = () => {
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-xl p-10 shadow-2xl animate-in zoom-in">
-            <h3 className="text-3xl font-black mb-8">Thêm bài học mới</h3>
+            <h3 className="text-3xl font-black mb-8">{editingLessonId ? 'Cập nhật bài học' : 'Thêm bài học mới'}</h3>
             <input type="text" placeholder="Tên bài học" value={importLessonTitle} onChange={(e) => setImportLessonTitle(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl mb-6 focus:border-indigo-500 outline-none font-bold"/>
             <textarea placeholder="Nhập danh sách chữ Hán..." value={importText} onChange={(e) => setImportText(e.target.value)} className="w-full h-48 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl mb-8 focus:border-indigo-500 outline-none font-chinese text-2xl resize-none"/>
             <div className="flex gap-4">
               <button onClick={() => setShowImportModal(false)} className="flex-1 py-4 font-bold text-slate-400">Hủy</button>
-              <button onClick={handleSmartImport} disabled={isEnriching} className="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg disabled:opacity-50">{isEnriching ? 'Đang xử lý...' : 'Xác nhận'}</button>
+              <button onClick={handleSmartImport} disabled={isEnriching} className="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg disabled:opacity-50">{isEnriching ? 'AI đang xử lý...' : editingLessonId ? 'Cập nhật' : 'Xác nhận'}</button>
             </div>
           </div>
         </div>

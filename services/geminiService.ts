@@ -87,12 +87,21 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
   } catch (e) { return false; }
 };
 
-/**
- * Lấy danh sách bài học dựa trên Category.
- * Nhận 1 tham số duy nhất là category để khớp với App.tsx
- */
+export const deleteCustomLesson = async (lessonId: string) => {
+  if (!supabase) return false;
+  try {
+    // Cascade delete handles vocabulary if foreign key is set up, but let's be explicit
+    await supabase.from('vocabulary').delete().eq('lesson_id', lessonId);
+    const { error } = await supabase.from('lessons').delete().eq('id', lessonId);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error("Delete error:", e);
+    return false;
+  }
+};
+
 export const fetchLessonsByCategory = async (category: Category): Promise<Lesson[]> => {
-  // Lấy dữ liệu tĩnh nếu có
   const staticData = (category.level && HSK_STATIC_LESSONS[category.level]) 
     ? HSK_STATIC_LESSONS[category.level] 
     : [];
@@ -128,9 +137,6 @@ export const fetchVocabularyForLesson = async (lesson: Lesson): Promise<Vocabula
   }));
 };
 
-/**
- * Thống kê tổng quan từ Database
- */
 export const getGlobalStats = async () => {
   if (!supabase) return { totalWords: 0, totalLessons: 0 };
   try {
@@ -142,7 +148,6 @@ export const getGlobalStats = async () => {
   }
 };
 
-// --- TTS Logic ---
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
