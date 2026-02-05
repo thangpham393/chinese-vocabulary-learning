@@ -50,47 +50,68 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
       id: `custom-${Date.now()}-${idx}`,
     }));
   } catch (error) {
+    console.error("Gemini Error:", error);
     return [];
   }
 };
 
 export const saveCustomLesson = async (category: Category, lesson: Lesson, vocabulary: VocabularyItem[]) => {
-  if (!supabase) return false;
+  if (!supabase) {
+    console.error("Supabase client not initialized. Check your environment variables.");
+    return false;
+  }
+  
   try {
+    // 1. Lưu/Cập nhật Lesson
     const { error: lessonError } = await supabase
       .from('lessons')
       .upsert({
         id: lesson.id,
-        level: category.level || 0,
+        level: category.level || null,
         category_id: category.id,
-        number: lesson.number,
+        number: Number(lesson.number) || 0,
         title: lesson.title,
-        description: lesson.description
+        description: lesson.description || ""
       });
-    if (lessonError) throw lessonError;
+    
+    if (lessonError) {
+      console.error("Supabase Lesson Error (400?):", lessonError);
+      throw lessonError;
+    }
 
+    // 2. Xóa từ vựng cũ nếu đang edit
     await supabase.from('vocabulary').delete().eq('lesson_id', lesson.id);
+
+    // 3. Thêm từ vựng mới
     const vocabToInsert = vocabulary.map(v => ({
-      id: v.id,
+      id: v.id || `v-${Date.now()}-${Math.random()}`,
       lesson_id: lesson.id,
       word: v.word,
-      pinyin: v.pinyin,
-      part_of_speech: v.partOfSpeech,
-      definition_vi: v.definitionVi,
-      definition_en: v.definitionEn,
-      example_zh: v.exampleZh,
-      example_vi: v.exampleVi,
-      image_url: v.imageUrl
+      pinyin: v.pinyin || "",
+      part_of_speech: v.partOfSpeech || "n.",
+      definition_vi: v.definitionVi || "",
+      definition_en: v.definitionEn || "",
+      example_zh: v.exampleZh || "",
+      example_vi: v.exampleVi || "",
+      image_url: v.imageUrl || null
     }));
-    await supabase.from('vocabulary').insert(vocabToInsert);
+
+    const { error: vocabError } = await supabase.from('vocabulary').insert(vocabToInsert);
+    if (vocabError) {
+      console.error("Supabase Vocab Error:", vocabError);
+      throw vocabError;
+    }
+    
     return true;
-  } catch (e) { return false; }
+  } catch (e) { 
+    console.error("General Save Error:", e);
+    return false; 
+  }
 };
 
 export const deleteCustomLesson = async (lessonId: string) => {
   if (!supabase) return false;
   try {
-    // Cascade delete handles vocabulary if foreign key is set up, but let's be explicit
     await supabase.from('vocabulary').delete().eq('lesson_id', lessonId);
     const { error } = await supabase.from('lessons').delete().eq('id', lessonId);
     if (error) throw error;

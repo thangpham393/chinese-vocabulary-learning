@@ -25,7 +25,6 @@ const App: React.FC = () => {
   const [importLessonTitle, setImportLessonTitle] = useState('');
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   
-  // New state for modal category selection
   const [modalCategoryId, setModalCategoryId] = useState<string>('hsk1');
 
   const allCategories = [...HSK_CATEGORIES, ...TOPIC_CATEGORIES];
@@ -98,7 +97,7 @@ const App: React.FC = () => {
 
   const handleDeleteLesson = async (e: React.MouseEvent, lessonId: string) => {
     e.stopPropagation();
-    if (!window.confirm("Bạn có chắc chắn muốn xóa bài học này? Tất cả từ vựng trong bài cũng sẽ bị xóa.")) return;
+    if (!window.confirm("Bạn có chắc chắn muốn xóa bài học này?")) return;
     const success = await deleteCustomLesson(lessonId);
     if (success && selectedCategory) {
       await refreshLessons(selectedCategory);
@@ -115,16 +114,24 @@ const App: React.FC = () => {
   };
 
   const handleSmartImport = async () => {
-    if (!importText.trim() || !importLessonTitle.trim()) return;
+    if (!importText.trim() || !importLessonTitle.trim()) {
+      alert("Vui lòng nhập đầy đủ tiêu đề và danh sách từ vựng.");
+      return;
+    }
     
     const targetCategory = allCategories.find(c => c.id === modalCategoryId);
     if (!targetCategory) return;
 
     setIsEnriching(true);
-    const enrichedVocab = await enrichVocabularyWithAI(importText);
-    if (enrichedVocab.length > 0) {
+    try {
+      const enrichedVocab = await enrichVocabularyWithAI(importText);
+      if (enrichedVocab.length === 0) {
+        alert("AI không thể nhận diện được từ vựng. Vui lòng thử lại với danh sách chữ Hán rõ ràng hơn.");
+        setIsEnriching(false);
+        return;
+      }
+
       const lessonId = editingLessonId || `lesson-${Date.now()}`;
-      // Logic for lesson number: if editing, keep same. If new, count existing + 1
       const existingLesson = lessons.find(l => l.id === lessonId);
       const newLesson: Lesson = { 
         id: lessonId, 
@@ -135,20 +142,23 @@ const App: React.FC = () => {
       
       const success = await saveCustomLesson(targetCategory, newLesson, enrichedVocab);
       if (success) {
-        // If the target category is the one we're currently viewing, refresh it
         if (selectedCategory?.id === targetCategory.id) {
           await refreshLessons(targetCategory);
           setVocabList(enrichedVocab);
           setSelectedLesson(newLesson);
           setMode(AppMode.STUDY_MODE_SELECT);
         } else {
-          // If added to different category, just go to that category
           handleSelectCategory(targetCategory);
         }
         setShowImportModal(false);
+      } else {
+        alert("Lỗi khi lưu vào Database. Vui lòng kiểm tra console hoặc thử lại sau.");
       }
+    } catch (err) {
+      alert("Đã có lỗi xảy ra trong quá trình xử lý.");
+    } finally {
+      setIsEnriching(false);
     }
-    setIsEnriching(false);
   };
 
   const filteredLessons = lessons.filter(l => 
@@ -305,19 +315,23 @@ const App: React.FC = () => {
             
             <div className="space-y-6">
               <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Chọn cấp độ / Chủ đề</label>
-                <select 
-                  value={modalCategoryId}
-                  onChange={(e) => setModalCategoryId(e.target.value)}
-                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none font-bold"
-                >
-                  <optgroup label="Lộ trình HSK">
-                    {HSK_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                  </optgroup>
-                  <optgroup label="Chủ đề phổ biến">
-                    {TOPIC_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                  </optgroup>
-                </select>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Chọn cấp độ / Chủ đề</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {allCategories.map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setModalCategoryId(cat.id)}
+                      className={`p-3 rounded-2xl border-2 transition-all flex items-center gap-2 ${
+                        modalCategoryId === cat.id 
+                        ? 'border-indigo-600 bg-indigo-50 shadow-sm' 
+                        : 'border-slate-100 bg-slate-50 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="text-xl">{cat.icon}</span>
+                      <span className={`text-sm font-bold truncate ${modalCategoryId === cat.id ? 'text-indigo-600' : 'text-slate-500'}`}>{cat.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
