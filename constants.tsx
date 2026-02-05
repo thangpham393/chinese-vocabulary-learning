@@ -1,5 +1,4 @@
 
-import React from 'react';
 import { Category, CategoryType } from './types';
 
 export const HSK_CATEGORIES: Category[] = [
@@ -12,10 +11,10 @@ export const HSK_CATEGORIES: Category[] = [
 ];
 
 export const TOPIC_CATEGORIES: Category[] = [
-  { id: 'food', name: 'Ẩm thực', type: CategoryType.TOPIC, icon: '🥟' },
-  { id: 'travel', name: 'Du lịch', type: CategoryType.TOPIC, icon: '✈️' },
-  { id: 'business', name: 'Kinh doanh', type: CategoryType.TOPIC, icon: '💼' },
-  { id: 'daily', name: 'Đời sống', type: CategoryType.TOPIC, icon: '🏠' },
-  { id: 'tech', name: 'Công nghệ', type: CategoryType.TOPIC, icon: '💻' },
-  { id: 'emotion', name: 'Cảm xúc', type: CategoryType.TOPIC, icon: '❤️' },
+  { id: 'food', name: 'Ẩm thực', type: CategoryType.TOPIC, level: 10, icon: '🥟' },
+  { id: 'travel', name: 'Du lịch', type: CategoryType.TOPIC, level: 11, icon: '✈️' },
+  { id: 'business', name: 'Kinh doanh', type: CategoryType.TOPIC, level: 12, icon: '💼' },
+  { id: 'daily', name: 'Đời sống', type: CategoryType.TOPIC, level: 13, icon: '🏠' },
+  { id: 'tech', name: 'Công nghệ', type: CategoryType.TOPIC, level: 14, icon: '💻' },
+  { id: 'emotion', name: 'Cảm xúc', type: CategoryType.TOPIC, level: 15, icon: '❤️' },
 ];
