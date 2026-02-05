@@ -12,8 +12,11 @@ const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
+/**
+ * AI phân tích danh sách chữ Hán và trả về bộ từ vựng đầy đủ
+ */
 export const enrichVocabularyWithAI = async (rawWords: string): Promise<VocabularyItem[]> => {
-  const prompt = `Phân tích các từ Tiếng Trung sau: "${rawWords}". Trả về JSON array: word, pinyin, partOfSpeech, definitionVi, definitionEn, exampleZh, exampleVi.`;
+  const prompt = `Phân tích danh sách từ vựng Tiếng Trung sau: "${rawWords}". Trả về JSON array: word, pinyin, partOfSpeech, definitionVi, definitionEn, exampleZh, exampleVi.`;
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -46,13 +49,20 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
   }
 };
 
+/**
+ * Lưu bài học vào Database. 
+ * Trả về { success: boolean, message?: string } để UI hiển thị lỗi rõ ràng.
+ */
 export const saveCustomLesson = async (category: Category, lesson: Lesson, vocabulary: VocabularyItem[]) => {
-  if (!supabase) return false;
+  if (!supabase) {
+    return { success: false, message: "Supabase chưa được cấu hình. Vui lòng kiểm tra Environment Variables." };
+  }
+
   try {
-    // Tạo ID dạng số (Integer) để tránh lỗi kiểu dữ liệu
+    // Sử dụng ID số nguyên (Integer) vì đa số bảng DB mặc định kiểu này
     const lessonId = Date.now();
 
-    // 1. Lưu bài học (Chỉ dùng các cột chắc chắn có trong bảng 'lessons')
+    // 1. Lưu vào bảng 'lessons'
     const { error: lessonError } = await supabase.from('lessons').upsert({
       id: lessonId,
       level: Number(category.level),
@@ -62,11 +72,11 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
     });
     
     if (lessonError) {
-      console.error("Lỗi bảng lessons:", lessonError.message);
-      return false;
+      console.error("Database Error (Lessons):", lessonError);
+      return { success: false, message: `Lỗi bảng lessons: ${lessonError.message}` };
     }
 
-    // 2. Lưu từ vựng (Chuyển key sang snake_case để khớp với DB)
+    // 2. Lưu vào bảng 'vocabulary'
     const vocabToInsert = vocabulary.map(v => ({
       lesson_id: lessonId,
       word: v.word,
@@ -81,14 +91,14 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
     const { error: vocabError } = await supabase.from('vocabulary').insert(vocabToInsert);
     
     if (vocabError) {
-      console.error("Lỗi bảng vocabulary:", vocabError.message);
-      return false;
+      console.error("Database Error (Vocabulary):", vocabError);
+      return { success: false, message: `Lỗi bảng vocabulary: ${vocabError.message}` };
     }
     
-    return true;
-  } catch (e) {
-    console.error("Lỗi hệ thống khi lưu:", e);
-    return false;
+    return { success: true };
+  } catch (e: any) {
+    console.error("Critical System Error:", e);
+    return { success: false, message: e.message || "Lỗi hệ thống không xác định." };
   }
 };
 
@@ -97,7 +107,7 @@ export const fetchLessonsByCategory = async (category: Category): Promise<Lesson
   if (!supabase) return staticData;
   const { data, error } = await supabase.from('lessons').select('*').eq('level', category.level).order('number', { ascending: true });
   if (error) return staticData;
-  return [...staticData, ...data];
+  return [...staticData, ...(data || [])];
 };
 
 export const fetchVocabularyForLesson = async (lesson: Lesson): Promise<VocabularyItem[]> => {
@@ -105,7 +115,7 @@ export const fetchVocabularyForLesson = async (lesson: Lesson): Promise<Vocabula
   if (!supabase) return [];
   const { data } = await supabase.from('vocabulary').select('*').eq('lesson_id', lesson.id);
   return (data || []).map(item => ({
-    id: item.id, word: item.word, pinyin: item.pinyin, partOfSpeech: item.part_of_speech,
+    id: String(item.id), word: item.word, pinyin: item.pinyin, partOfSpeech: item.part_of_speech,
     definitionVi: item.definition_vi, definitionEn: item.definition_en,
     exampleZh: item.example_zh, exampleVi: item.example_vi
   }));

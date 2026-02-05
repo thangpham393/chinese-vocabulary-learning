@@ -37,7 +37,7 @@ const App: React.FC = () => {
       const cat = allCategories.find(c => c.level === modalLevel);
       if (cat) {
         fetchLessonsByCategory(cat).then(catLessons => {
-          const maxNum = catLessons.reduce((max, l) => Math.max(max, l.number), 0);
+          const maxNum = catLessons.reduce((max, l) => Math.max(max, Number(l.number)), 0);
           setImportLessonNumber(maxNum + 1);
         });
       }
@@ -74,17 +74,19 @@ const App: React.FC = () => {
         description: `Học ${enriched.length} từ` 
       };
       
-      const success = await saveCustomLesson(targetCategory, newLesson, enriched);
-      if (success) {
+      const result = await saveCustomLesson(targetCategory, newLesson, enriched);
+      if (result.success) {
         setShowImportModal(false);
         setImportText('');
         setImportLessonTitle('');
         handleSelectCategory(targetCategory);
+        getGlobalStats().then(setStats);
       } else {
-        alert("Không thể lưu. Hãy kiểm tra lại kết nối Database.");
+        // Hiển thị lỗi chi tiết để người dùng biết vấn đề nằm ở đâu (ví dụ: thiếu quyền RLS)
+        alert(`Lỗi Database: ${result.message}\n\nHãy đảm bảo bạn đã tạo bảng 'lessons' và 'vocabulary' với các chính sách (RLS) cho phép Insert.`);
       }
     } else {
-      alert("AI không nhận diện được từ vựng. Hãy thử lại.");
+      alert("AI không nhận diện được từ vựng. Hãy kiểm tra lại định dạng nhập vào.");
     }
     setIsEnriching(false);
   };
@@ -98,14 +100,14 @@ const App: React.FC = () => {
           <div className="animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-12 gap-4">
               <div>
-                <h1 className="text-4xl font-black tracking-tight text-slate-900">Khám phá Tiếng Trung</h1>
-                <p className="text-slate-500 font-medium mt-2">Đang có {stats.totalWords} từ vựng và {stats.totalLessons} bài học</p>
+                <h1 className="text-4xl font-black tracking-tight text-slate-900">Zhongwen Master</h1>
+                <p className="text-slate-500 font-medium mt-2">Tổng: {stats.totalWords} từ / {stats.totalLessons} bài học</p>
               </div>
               <button 
                 onClick={() => setShowImportModal(true)} 
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all hover:scale-105 active:scale-95"
               >
-                + Thêm bài học mới
+                + Thêm bài mới
               </button>
             </div>
             
@@ -139,7 +141,7 @@ const App: React.FC = () => {
               <button onClick={() => setMode(AppMode.HOME)} className="p-4 bg-white rounded-2xl shadow-sm hover:bg-slate-50 transition-colors border border-slate-100">← Quay lại</button>
               <div>
                 <h2 className="text-3xl font-black">{selectedCategory?.name}</h2>
-                <p className="text-slate-400 font-bold">Chọn bài học để bắt đầu</p>
+                <p className="text-slate-400 font-bold">Danh sách bài học</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -156,7 +158,7 @@ const App: React.FC = () => {
               ))}
               {lessons.length === 0 && (
                 <div className="col-span-full py-32 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
-                  <p className="text-2xl font-bold text-slate-300 italic">Danh mục này hiện chưa có bài học.</p>
+                  <p className="text-2xl font-bold text-slate-300 italic">Chưa có bài học nào.</p>
                 </div>
               )}
             </div>
@@ -188,7 +190,7 @@ const App: React.FC = () => {
         {mode === AppMode.LOADING && (
           <div className="flex flex-col items-center justify-center py-48">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-6 font-black text-slate-400 text-lg uppercase tracking-widest">Đang chuẩn bị kiến thức...</p>
+            <p className="mt-6 font-black text-slate-400 text-lg uppercase tracking-widest">Đang tải...</p>
           </div>
         )}
       </main>
@@ -245,7 +247,7 @@ const App: React.FC = () => {
                   className="w-full h-48 p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-chinese text-4xl outline-none focus:border-indigo-500 resize-none shadow-inner" 
                   placeholder="你好&#10;谢谢&#10;..."
                 ></textarea>
-                <p className="mt-3 text-slate-400 font-bold text-sm italic">✨ AI sẽ tự động tạo Pinyin, Nghĩa và Ví dụ cho bạn.</p>
+                <p className="mt-3 text-slate-400 font-bold text-sm italic">✨ AI sẽ tự động tạo bộ từ vựng đầy đủ cho bạn.</p>
               </div>
             </div>
 
