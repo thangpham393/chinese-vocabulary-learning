@@ -88,12 +88,10 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
 
   if (supabase) {
     try {
-      // Logic xóa cũ trước khi insert nếu là cập nhật (update)
       if (lesson.id) {
         await supabase.from('vocabulary').delete().eq('lesson_id', lessonId);
         await supabase.from('lessons').delete().eq('id', lessonId);
       }
-
       await supabase.from('lessons').insert({
         id: lessonId,
         level: category.level,
@@ -101,7 +99,6 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
         title: lesson.title,
         description: lesson.description
       });
-
       const vocabData = vocabulary.map(v => ({
         lesson_id: lessonId,
         word: v.word,
@@ -112,7 +109,6 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
         example_zh: v.exampleZh,
         example_vi: v.exampleVi
       }));
-
       await supabase.from('vocabulary').insert(vocabData);
       return true;
     } catch (err) {
@@ -120,14 +116,10 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
     }
   }
 
-  // Local storage logic
   const lessons = getLocalLessons(category.level);
   const existingIdx = lessons.findIndex(l => String(l.id) === String(lessonId));
-  if (existingIdx > -1) {
-    lessons[existingIdx] = newLesson;
-  } else {
-    lessons.push(newLesson);
-  }
+  if (existingIdx > -1) lessons[existingIdx] = newLesson;
+  else lessons.push(newLesson);
   saveLocalLessons(category.level, lessons);
   saveLocalVocab(lessonId, vocabulary);
   return true;
@@ -138,9 +130,7 @@ export const deleteLesson = async (lessonId: string | number, level: number) => 
     try {
       await supabase.from('vocabulary').delete().eq('lesson_id', lessonId);
       await supabase.from('lessons').delete().eq('id', lessonId);
-    } catch (e) {
-      console.warn("Supabase delete failed");
-    }
+    } catch (e) { console.warn("Supabase delete failed"); }
   }
   deleteLocalLesson(lessonId, level);
   return true;
@@ -172,6 +162,13 @@ export const fetchVocab = async (lessonId: string | number): Promise<VocabularyI
     } catch (e) { console.warn("Fetch vocab DB failed"); }
   }
   return getLocalVocab(lessonId);
+};
+
+export const fetchAllVocabByLevel = async (level: number): Promise<VocabularyItem[]> => {
+  const lessons = await fetchLessons(level);
+  const allVocabPromises = lessons.map(l => fetchVocab(l.id));
+  const results = await Promise.all(allVocabPromises);
+  return results.flat();
 };
 
 export const speak = async (text: string, rate: number = 1.0) => {

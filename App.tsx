@@ -8,7 +8,7 @@ import ListeningPractice from './components/ListeningPractice';
 import BottomNav from './components/BottomNav';
 import { HSK_CATEGORIES, TOPIC_CATEGORIES, YCT_CATEGORIES } from './constants';
 import { AppMode, Category, Lesson, VocabularyItem } from './types';
-import { fetchLessons, fetchVocab, enrichVocabularyWithAI, saveCustomLesson, deleteLesson } from './services/geminiService';
+import { fetchLessons, fetchVocab, fetchAllVocabByLevel, enrichVocabularyWithAI, saveCustomLesson, deleteLesson } from './services/geminiService';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.HOME);
@@ -51,6 +51,25 @@ const App: React.FC = () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       alert("Lỗi khi tải nội dung bài học.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGlobalReview = async (cat: Category) => {
+    setLoading(true);
+    try {
+      const data = await fetchAllVocabByLevel(cat.level);
+      if (data.length === 0) {
+        alert("Trình độ này hiện chưa có từ vựng nào để ôn tập.");
+        return;
+      }
+      setVocab(data);
+      setSelectedLesson({ id: 'global', title: `Ôn tập ${cat.name}`, number: 0, description: `Toàn bộ ${data.length} từ vựng` });
+      setMode(AppMode.REVIEW);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      alert("Lỗi khi gom dữ liệu ôn tập.");
     } finally {
       setLoading(false);
     }
@@ -100,7 +119,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FDFDFF] text-slate-900 pb-32 pt-24">
-      <Header onHome={() => setMode(AppMode.HOME)} onReview={() => setMode(AppMode.HOME)} />
+      <Header onHome={() => setMode(AppMode.HOME)} onReview={() => setMode(AppMode.GLOBAL_REVIEW_SELECT)} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {mode === AppMode.HOME && (
@@ -124,8 +143,8 @@ const App: React.FC = () => {
                     <button onClick={() => setShowModal(true)} className="bg-black text-white px-10 py-5 rounded-[2rem] font-black text-sm shadow-2xl hover:bg-slate-800 hover:-translate-y-1 active:scale-95 transition-all">
                       + Tạo lộ trình riêng
                     </button>
-                    <button className="bg-slate-100 text-slate-600 px-10 py-5 rounded-[2rem] font-bold text-sm hover:bg-slate-200 transition-all">
-                      Thư viện cộng đồng
+                    <button onClick={() => setMode(AppMode.GLOBAL_REVIEW_SELECT)} className="bg-slate-100 text-slate-600 px-10 py-5 rounded-[2rem] font-bold text-sm hover:bg-slate-200 transition-all">
+                      Chế độ Ôn tập Tổng
                     </button>
                   </div>
                </div>
@@ -154,16 +173,52 @@ const App: React.FC = () => {
                 {YCT_CATEGORIES.map(c => <CategoryCard key={c.id} category={c} onClick={handleSelectCat} />)}
               </div>
             </section>
+          </div>
+        )}
 
-            <section className="mb-20">
-              <div className="flex flex-col items-center mb-12">
-                <h2 className="text-3xl font-black text-slate-900 mb-2">Chủ đề Đời sống</h2>
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Vốn từ linh hoạt cho giao tiếp</p>
+        {mode === AppMode.GLOBAL_REVIEW_SELECT && (
+          <div className="animate-in slide-in-from-bottom-10 duration-700 max-w-5xl mx-auto py-10">
+            <div className="flex flex-col items-center text-center mb-16">
+              <div className="bg-indigo-50 text-indigo-600 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.4em] mb-4">Mastery Mode</div>
+              <h2 className="text-5xl font-black text-slate-900 mb-4">Ôn tập Tổng hợp</h2>
+              <p className="text-slate-400 font-medium max-w-lg">Chọn một trình độ để ôn tập toàn bộ từ vựng đã học. Hệ thống sẽ trộn ngẫu nhiên tất cả các bài.</p>
+            </div>
+
+            <div className="space-y-20">
+              <div>
+                <h3 className="text-xl font-black mb-8 flex items-center gap-3">
+                  <span className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center text-xs">A</span>
+                  HSK Challenge
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                  {HSK_CATEGORIES.map(c => (
+                    <button key={c.id} onClick={() => handleGlobalReview(c)} className="bg-white p-6 rounded-[2rem] bento-shadow border border-slate-50 hover:border-indigo-600 hover:-translate-y-1 transition-all flex flex-col items-center gap-3">
+                      <span className="text-3xl">{c.icon}</span>
+                      <span className="font-black text-xs">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
-                {TOPIC_CATEGORIES.map(c => <CategoryCard key={c.id} category={c} onClick={handleSelectCat} />)}
+
+              <div>
+                <h3 className="text-xl font-black mb-8 flex items-center gap-3">
+                  <span className="w-8 h-8 bg-rose-500 text-white rounded-lg flex items-center justify-center text-xs">B</span>
+                  YCT Playground
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                  {YCT_CATEGORIES.map(c => (
+                    <button key={c.id} onClick={() => handleGlobalReview(c)} className="bg-white p-6 rounded-[2rem] bento-shadow border border-slate-50 hover:border-rose-500 hover:-translate-y-1 transition-all flex flex-col items-center gap-3">
+                      <span className="text-3xl">{c.icon}</span>
+                      <span className="font-black text-xs">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </section>
+            </div>
+
+            <div className="mt-20 flex justify-center">
+              <button onClick={() => setMode(AppMode.HOME)} className="text-slate-400 font-black text-xs uppercase tracking-widest hover:text-black transition-colors">← Quay lại trang chủ</button>
+            </div>
           </div>
         )}
 
@@ -247,7 +302,7 @@ const App: React.FC = () => {
         )}
 
         {mode === AppMode.FLASHCARD && <FlashcardStudy items={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} onFinish={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
-        {mode === AppMode.REVIEW && <ReviewSession items={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} onComplete={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
+        {mode === AppMode.REVIEW && <ReviewSession items={vocab} onExit={() => selectedLesson?.id === 'global' ? setMode(AppMode.GLOBAL_REVIEW_SELECT) : setMode(AppMode.STUDY_MODE_SELECT)} onComplete={() => selectedLesson?.id === 'global' ? setMode(AppMode.GLOBAL_REVIEW_SELECT) : setMode(AppMode.STUDY_MODE_SELECT)} />}
         {mode === AppMode.LISTENING && <ListeningPractice level={selectedCat?.level || 1} allVocab={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
 
         {loading && (
@@ -261,7 +316,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <BottomNav currentMode={mode} onHome={() => setMode(AppMode.HOME)} onReview={() => {}} />
+      <BottomNav currentMode={mode} onHome={() => setMode(AppMode.HOME)} onReview={() => setMode(AppMode.GLOBAL_REVIEW_SELECT)} />
 
       {/* Modern Modal Design */}
       {showModal && (
