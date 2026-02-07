@@ -6,7 +6,7 @@ import FlashcardStudy from './components/FlashcardStudy';
 import ReviewSession from './components/ReviewSession';
 import ListeningPractice from './components/ListeningPractice';
 import BottomNav from './components/BottomNav';
-import { HSK_CATEGORIES, TOPIC_CATEGORIES } from './constants';
+import { HSK_CATEGORIES, TOPIC_CATEGORIES, YCT_CATEGORIES } from './constants';
 import { AppMode, Category, Lesson, VocabularyItem } from './types';
 import { fetchLessons, fetchVocab, enrichVocabularyWithAI, saveCustomLesson, deleteLesson } from './services/geminiService';
 
@@ -23,6 +23,8 @@ const App: React.FC = () => {
   const [importTitle, setImportTitle] = useState('');
   const [importText, setImportText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const ALL_CATS = [...HSK_CATEGORIES, ...YCT_CATEGORIES, ...TOPIC_CATEGORIES];
 
   const handleSelectCat = async (cat: Category) => {
     setSelectedCat(cat);
@@ -75,7 +77,7 @@ const App: React.FC = () => {
     setIsProcessing(true);
     try {
       const enriched = await enrichVocabularyWithAI(importText);
-      const cat = [...HSK_CATEGORIES, ...TOPIC_CATEGORIES].find(c => c.level === importLevel);
+      const cat = ALL_CATS.find(c => c.level === importLevel);
       if (cat) {
         await saveCustomLesson(cat, { 
           id: '', 
@@ -109,46 +111,56 @@ const App: React.FC = () => {
                <div className="relative z-10 max-w-2xl text-center md:text-left">
                   <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-6">
                     <span className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></span>
-                    Hành trình bắt đầu từ đây
+                    Học tập không giới hạn
                   </div>
                   <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-6 leading-[1.1]">
-                    Học Tiếng Trung <br/>
-                    <span className="text-indigo-600 italic">Thật Đơn Giản.</span>
+                    Chinh Phục <br/>
+                    <span className="text-indigo-600 italic">Tiếng Trung.</span>
                   </h1>
                   <p className="text-slate-400 font-medium text-lg md:text-xl leading-relaxed mb-10 max-w-lg">
-                    Hệ thống học vựng chuẩn HSK với trí tuệ nhân tạo Gemini giúp bạn ghi nhớ nhanh hơn 3 lần qua hình ảnh và âm thanh.
+                    Hệ thống bài học chuẩn HSK & YCT giúp trẻ em và người lớn ghi nhớ từ vựng qua AI 3D trực quan.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <button onClick={() => setShowModal(true)} className="bg-black text-white px-10 py-5 rounded-[2rem] font-black text-sm shadow-2xl hover:bg-slate-800 hover:-translate-y-1 active:scale-95 transition-all">
                       + Tạo lộ trình riêng
                     </button>
                     <button className="bg-slate-100 text-slate-600 px-10 py-5 rounded-[2rem] font-bold text-sm hover:bg-slate-200 transition-all">
-                      Tìm hiểu thêm
+                      Thư viện cộng đồng
                     </button>
                   </div>
                </div>
                <div className="relative w-full md:w-1/3 aspect-square bg-slate-50 rounded-[3rem] flex items-center justify-center text-[10rem] animate-bounce duration-[3000ms]">
-                 🧧
+                 🪁
                  <div className="absolute inset-0 border-[16px] border-white rounded-[3rem] pointer-events-none"></div>
                </div>
             </div>
             
             <section className="mb-20">
               <div className="flex flex-col items-center mb-12">
-                <h2 className="text-3xl font-black text-slate-900 mb-2">Lộ trình HSK Standard</h2>
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Học bài bản theo cấp độ thế giới</p>
+                <h2 className="text-3xl font-black text-slate-900 mb-2">Lộ trình HSK (Người lớn)</h2>
+                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Theo chuẩn khung ngôn ngữ quốc tế</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
                 {HSK_CATEGORIES.map(c => <CategoryCard key={c.id} category={c} onClick={handleSelectCat} />)}
               </div>
             </section>
 
             <section className="mb-20">
               <div className="flex flex-col items-center mb-12">
-                <h2 className="text-3xl font-black text-slate-900 mb-2">Chủ đề Đời sống</h2>
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Mở rộng vốn từ linh hoạt</p>
+                <h2 className="text-3xl font-black text-slate-900 mb-2 text-rose-500">Lộ trình YCT (Trẻ em)</h2>
+                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Vui vẻ, sinh động và dễ nhớ</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
+                {YCT_CATEGORIES.map(c => <CategoryCard key={c.id} category={c} onClick={handleSelectCat} />)}
+              </div>
+            </section>
+
+            <section className="mb-20">
+              <div className="flex flex-col items-center mb-12">
+                <h2 className="text-3xl font-black text-slate-900 mb-2">Chủ đề Đời sống</h2>
+                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Vốn từ linh hoạt cho giao tiếp</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
                 {TOPIC_CATEGORIES.map(c => <CategoryCard key={c.id} category={c} onClick={handleSelectCat} />)}
               </div>
             </section>
@@ -165,7 +177,7 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center text-center mb-16">
               <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-5xl bento-shadow border border-slate-50 mb-6">{selectedCat?.icon}</div>
               <h2 className="text-5xl font-black mb-3">{selectedCat?.name}</h2>
-              <p className="text-slate-400 font-bold">Danh sách bài học dành cho trình độ {selectedCat?.level}</p>
+              <p className="text-slate-400 font-bold">Danh sách bài học trình độ {selectedCat?.name}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -203,7 +215,7 @@ const App: React.FC = () => {
               Quay lại danh sách
             </button>
             <div className="text-center mb-16">
-              <div className="text-indigo-600 font-black text-[10px] uppercase tracking-[0.4em] mb-4">Select Mode</div>
+              <div className="text-indigo-600 font-black text-[10px] uppercase tracking-[0.4em] mb-4">Chọn chế độ học</div>
               <h2 className="text-5xl font-black text-slate-900 leading-tight">{selectedLesson?.title}</h2>
             </div>
             <div className="grid grid-cols-1 gap-5">
@@ -212,9 +224,6 @@ const App: React.FC = () => {
                 <div className="text-left flex-1">
                   <div className="text-2xl font-black text-slate-900 mb-1">Flashcards</div>
                   <div className="text-sm text-slate-400 font-bold">Ghi nhớ từ vựng qua thẻ 3D trực quan</div>
-                </div>
-                <div className="w-12 h-12 rounded-full border border-slate-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                 </div>
               </button>
               
@@ -247,7 +256,7 @@ const App: React.FC = () => {
                 <div className="absolute inset-0 border-8 border-indigo-100 rounded-full"></div>
                 <div className="absolute inset-0 border-8 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
              </div>
-             <p className="font-black text-indigo-600 animate-pulse text-lg uppercase tracking-[0.3em]">Preparing your journey...</p>
+             <p className="font-black text-indigo-600 animate-pulse text-lg uppercase tracking-[0.3em]">Đang chuẩn bị...</p>
           </div>
         )}
       </main>
@@ -258,32 +267,39 @@ const App: React.FC = () => {
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xl z-[300] flex items-center justify-center p-4">
           <div className="bg-white rounded-[4rem] w-full max-w-2xl p-12 shadow-2xl animate-in zoom-in duration-500 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500"></div>
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-rose-500 to-emerald-500"></div>
             
             <button onClick={() => setShowModal(false)} className="absolute top-10 right-10 w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:text-black hover:rotate-90 transition-all">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
 
-            <h3 className="text-5xl font-black mb-2 text-slate-900">Custom Path</h3>
+            <h3 className="text-5xl font-black mb-2 text-slate-900">Tạo lộ trình</h3>
             <p className="text-slate-400 font-bold mb-12">Hô biến danh sách từ thô thành bài học sinh động bằng AI.</p>
             
             <div className="space-y-10">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Danh mục</label>
                   <select value={importLevel} onChange={e => setImportLevel(Number(e.target.value))} className="w-full p-6 bg-slate-50 border border-slate-100 rounded-[2rem] font-black outline-none appearance-none cursor-pointer hover:border-indigo-200 transition-colors">
-                    {HSK_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
-                    {TOPIC_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
+                    <optgroup label="HSK (Người lớn)">
+                      {HSK_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
+                    </optgroup>
+                    <optgroup label="YCT (Trẻ em)">
+                      {YCT_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
+                    </optgroup>
+                    <optgroup label="Chủ đề">
+                      {TOPIC_CATEGORIES.map(c => <option key={c.id} value={c.level}>{c.name}</option>)}
+                    </optgroup>
                   </select>
                 </div>
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Lesson Title</label>
-                  <input type="text" value={importTitle} onChange={e => setImportTitle(e.target.value)} placeholder="Tên bài học..." className="w-full p-6 bg-slate-50 border border-slate-100 rounded-[2rem] font-black outline-none placeholder:text-slate-200 focus:border-indigo-400 transition-all"/>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tên bài học</label>
+                  <input type="text" value={importTitle} onChange={e => setImportTitle(e.target.value)} placeholder="VD: Đồ vật trong nhà..." className="w-full p-6 bg-slate-50 border border-slate-100 rounded-[2rem] font-black outline-none placeholder:text-slate-200 focus:border-indigo-400 transition-all"/>
                 </div>
               </div>
 
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chinese Words (Line by line)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Từ vựng (Mỗi dòng 1 từ)</label>
                 <textarea value={importText} onChange={e => setImportText(e.target.value)} className="w-full h-48 p-8 bg-slate-50 border border-slate-100 rounded-[3rem] font-chinese text-4xl outline-none placeholder:text-slate-100 resize-none focus:border-indigo-400 transition-all" placeholder="苹果&#10;西瓜&#10;香蕉"/>
               </div>
             </div>
@@ -294,7 +310,7 @@ const App: React.FC = () => {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
                   <>
-                    <span>Generate with AI</span>
+                    <span>Tạo bằng Gemini AI</span>
                     <span className="text-xl">✨</span>
                   </>
                 )}

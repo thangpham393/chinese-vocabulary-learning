@@ -10,6 +10,15 @@ export const HSK_CATEGORIES: Category[] = [
   { id: 'hsk6', name: 'HSK 6', type: CategoryType.HSK, level: 6, icon: '🏆' },
 ];
 
+export const YCT_CATEGORIES: Category[] = [
+  { id: 'yct1', name: 'YCT 1', type: CategoryType.YCT, level: 21, icon: '🧸' },
+  { id: 'yct2', name: 'YCT 2', type: CategoryType.YCT, level: 22, icon: '🎈' },
+  { id: 'yct3', name: 'YCT 3', type: CategoryType.YCT, level: 23, icon: '🚲' },
+  { id: 'yct4', name: 'YCT 4', type: CategoryType.YCT, level: 24, icon: '🎨' },
+  { id: 'yct5', name: 'YCT 5', type: CategoryType.YCT, level: 25, icon: '🪁' },
+  { id: 'yct6', name: 'YCT 6', type: CategoryType.YCT, level: 26, icon: '🚀' },
+];
+
 export const TOPIC_CATEGORIES: Category[] = [
   { id: 'food', name: 'Ẩm thực', type: CategoryType.TOPIC, level: 10, icon: '🥟' },
   { id: 'travel', name: 'Du lịch', type: CategoryType.TOPIC, level: 11, icon: '✈️' },

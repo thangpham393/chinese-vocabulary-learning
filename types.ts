@@ -1,7 +1,8 @@
 
 export enum CategoryType {
   HSK = 'HSK',
-  TOPIC = 'TOPIC'
+  TOPIC = 'TOPIC',
+  YCT = 'YCT'
 }
 
 export interface VocabularyItem {

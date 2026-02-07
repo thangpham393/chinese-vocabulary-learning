@@ -81,27 +81,33 @@ const ListeningPractice: React.FC<ListeningPracticeProps> = ({ level, allVocab, 
             <button 
               onClick={handleSpeak} 
               disabled={isSpeaking} 
-              className={`w-36 h-36 rounded-full flex items-center justify-center mx-auto shadow-2xl transition-all relative z-20 ${isSpeaking ? 'bg-white scale-95' : 'bg-indigo-600 text-white hover:scale-105 active:scale-90 hover:shadow-indigo-200'}`}
+              className={`w-36 h-36 rounded-full flex items-center justify-center mx-auto shadow-2xl transition-all relative z-20 ${isSpeaking ? 'bg-white scale-95 shadow-none' : 'bg-indigo-600 text-white hover:scale-105 active:scale-90 shadow-indigo-200'}`}
             >
               {isSpeaking ? (
-                <div className="flex items-end gap-1 h-8">
-                  {[...Array(5)].map((_, i) => (
+                <div className="flex items-end gap-1.5 h-10">
+                  {[...Array(6)].map((_, i) => (
                     <div 
                       key={i} 
-                      className="w-1.5 bg-indigo-600 rounded-full animate-bounce" 
-                      style={{ animationDelay: `${i * 0.1}s`, height: `${30 + Math.random() * 70}%` }}
+                      className="w-2 bg-indigo-600 rounded-full animate-waveform-bar" 
+                      style={{ 
+                        animationDelay: `${i * 0.15}s`,
+                        height: '100%'
+                      }}
                     />
                   ))}
                 </div>
               ) : (
-                <svg className="w-14 h-14" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
+                <div className="flex items-center justify-center">
+                  <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                  </svg>
+                  <div className="absolute inset-0 border-4 border-white/20 rounded-full"></div>
+                </div>
               )}
             </button>
           </div>
           <h2 className="text-2xl font-black text-slate-800">Nghe và tái hiện</h2>
-          <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em] mt-2">Hệ thống đang phát âm câu ví dụ...</p>
+          <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em] mt-2">{isSpeaking ? 'Đang phát âm thanh...' : 'Chạm vào nút để nghe'}</p>
         </div>
 
         <div className="space-y-6 relative z-10">
@@ -111,7 +117,7 @@ const ListeningPractice: React.FC<ListeningPracticeProps> = ({ level, allVocab, 
             value={userInput} 
             onChange={(e) => setUserInput(e.target.value)} 
             onKeyDown={(e) => e.key === 'Enter' && (showResult === 'idle' ? handleCheck() : nextQuestion())} 
-            placeholder="Nhập chữ Hán..." 
+            placeholder="Nhập chữ Hán nghe được..." 
             disabled={showResult !== 'idle'} 
             className="w-full p-8 bg-slate-50 border-2 border-transparent rounded-[2.5rem] outline-none text-3xl font-chinese text-center focus:border-indigo-500 transition-all placeholder:text-slate-200"
           />
@@ -129,7 +135,7 @@ const ListeningPractice: React.FC<ListeningPracticeProps> = ({ level, allVocab, 
               <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white mx-auto mb-4">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
               </div>
-              <p className="text-emerald-700 font-black">Tuyệt vời! Bạn đã nghe rất tốt.</p>
+              <p className="text-emerald-700 font-black">Chính xác! Cùng qua câu tiếp theo nhé.</p>
             </div>
           )}
 
@@ -137,10 +143,20 @@ const ListeningPractice: React.FC<ListeningPracticeProps> = ({ level, allVocab, 
             onClick={showResult === 'idle' ? handleCheck : nextQuestion} 
             className={`w-full py-6 rounded-[2.5rem] font-black text-lg shadow-xl transition-all active:scale-95 ${showResult === 'idle' ? 'bg-slate-900 text-white hover:bg-black' : 'bg-indigo-600 text-white shadow-indigo-200'}`}
           >
-            {showResult === 'idle' ? 'Kiểm tra' : 'Bài tiếp theo'}
+            {showResult === 'idle' ? 'Kiểm tra' : 'Tiếp tục'}
           </button>
         </div>
       </div>
+      
+      <style>{`
+        @keyframes waveform-bar {
+          0%, 100% { height: 30%; }
+          50% { height: 100%; }
+        }
+        .animate-waveform-bar {
+          animation: waveform-bar 0.8s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 };
