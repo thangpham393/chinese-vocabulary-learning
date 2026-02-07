@@ -5,6 +5,7 @@ import { genImage } from '../services/geminiService';
 
 interface ReviewSessionProps {
   items: VocabularyItem[];
+  level?: number;
   onComplete: (results: { completed: string[]; failed: string[] }) => void;
   onExit: () => void;
 }
@@ -18,7 +19,7 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return shuffled;
 };
 
-const ReviewSession: React.FC<ReviewSessionProps> = ({ items, onComplete, onExit }) => {
+const ReviewSession: React.FC<ReviewSessionProps> = ({ items, level, onComplete, onExit }) => {
   const shuffledItems = useMemo(() => shuffleArray(items), [items]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userInput, setUserInput] = useState('');
@@ -30,6 +31,9 @@ const ReviewSession: React.FC<ReviewSessionProps> = ({ items, onComplete, onExit
   
   const inputRef = useRef<HTMLInputElement>(null);
   const currentItem = shuffledItems[currentIndex];
+
+  // Kiểm tra nếu là HSK 3, 4, 5, 6 thì không hiện phiên âm (level 3 -> 6)
+  const isAdvancedLevel = level !== undefined && level >= 3 && level <= 6;
 
   useEffect(() => {
     setCurrentImage(undefined);
@@ -92,9 +96,20 @@ const ReviewSession: React.FC<ReviewSessionProps> = ({ items, onComplete, onExit
             )}
           </div>
 
-          <h2 className="text-6xl font-black text-slate-900 mb-8 font-chinese">
-            {showResult !== 'idle' ? currentItem.word : currentItem.pinyin}
-          </h2>
+          <div className="text-center mb-8 min-h-[80px] flex flex-col justify-center">
+            {showResult !== 'idle' ? (
+              <h2 className="text-6xl font-black text-slate-900 font-chinese animate-in zoom-in">{currentItem.word}</h2>
+            ) : (
+              isAdvancedLevel ? (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-4xl">✍️</span>
+                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">Hãy viết lại chữ Hán</span>
+                </div>
+              ) : (
+                <h2 className="text-5xl font-black text-slate-900">{currentItem.pinyin}</h2>
+              )
+            )}
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mb-10">
             <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">

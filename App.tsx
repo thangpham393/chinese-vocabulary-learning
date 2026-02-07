@@ -316,7 +316,7 @@ const App: React.FC = () => {
         )}
 
         {mode === AppMode.FLASHCARD && <FlashcardStudy items={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} onFinish={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
-        {mode === AppMode.REVIEW && <ReviewSession items={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} onComplete={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
+        {mode === AppMode.REVIEW && <ReviewSession items={vocab} level={selectedCat?.level} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} onComplete={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
         {mode === AppMode.LISTENING && <ListeningPractice level={selectedCat?.level || 1} allVocab={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
 
         {loading && (
