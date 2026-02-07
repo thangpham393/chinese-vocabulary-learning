@@ -56,8 +56,9 @@ const App: React.FC = () => {
     }
   };
 
-  const handleGlobalReview = async (cat: Category) => {
+  const handleGlobalReviewInit = async (cat: Category) => {
     setLoading(true);
+    setSelectedCat(cat);
     try {
       const data = await fetchAllVocabByLevel(cat.level);
       if (data.length === 0) {
@@ -65,11 +66,16 @@ const App: React.FC = () => {
         return;
       }
       setVocab(data);
-      setSelectedLesson({ id: 'global', title: `Ôn tập ${cat.name}`, number: 0, description: `Toàn bộ ${data.length} từ vựng` });
-      setMode(AppMode.REVIEW);
+      setSelectedLesson({ 
+        id: 'global', 
+        title: `Ôn tập Tổng hợp ${cat.name}`, 
+        number: 0, 
+        description: `Bao gồm tất cả ${data.length} từ vựng của trình độ này.` 
+      });
+      setMode(AppMode.STUDY_MODE_SELECT); // Chuyển đến màn hình chọn chế độ thay vì bắt đầu ngay
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
-      alert("Lỗi khi gom dữ liệu ôn tập.");
+      alert("Lỗi khi tập hợp dữ liệu trình độ.");
     } finally {
       setLoading(false);
     }
@@ -181,7 +187,7 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center text-center mb-16">
               <div className="bg-indigo-50 text-indigo-600 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.4em] mb-4">Mastery Mode</div>
               <h2 className="text-5xl font-black text-slate-900 mb-4">Ôn tập Tổng hợp</h2>
-              <p className="text-slate-400 font-medium max-w-lg">Chọn một trình độ để ôn tập toàn bộ từ vựng đã học. Hệ thống sẽ trộn ngẫu nhiên tất cả các bài.</p>
+              <p className="text-slate-400 font-medium max-w-lg">Chọn một trình độ để ôn tập toàn bộ từ vựng đã học. Bạn sẽ được chọn chế độ nghe hoặc viết sau khi chọn Level.</p>
             </div>
 
             <div className="space-y-20">
@@ -192,7 +198,7 @@ const App: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                   {HSK_CATEGORIES.map(c => (
-                    <button key={c.id} onClick={() => handleGlobalReview(c)} className="bg-white p-6 rounded-[2rem] bento-shadow border border-slate-50 hover:border-indigo-600 hover:-translate-y-1 transition-all flex flex-col items-center gap-3">
+                    <button key={c.id} onClick={() => handleGlobalReviewInit(c)} className="bg-white p-6 rounded-[2rem] bento-shadow border border-slate-50 hover:border-indigo-600 hover:-translate-y-1 transition-all flex flex-col items-center gap-3">
                       <span className="text-3xl">{c.icon}</span>
                       <span className="font-black text-xs">{c.name}</span>
                     </button>
@@ -207,7 +213,7 @@ const App: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                   {YCT_CATEGORIES.map(c => (
-                    <button key={c.id} onClick={() => handleGlobalReview(c)} className="bg-white p-6 rounded-[2rem] bento-shadow border border-slate-50 hover:border-rose-500 hover:-translate-y-1 transition-all flex flex-col items-center gap-3">
+                    <button key={c.id} onClick={() => handleGlobalReviewInit(c)} className="bg-white p-6 rounded-[2rem] bento-shadow border border-slate-50 hover:border-rose-500 hover:-translate-y-1 transition-all flex flex-col items-center gap-3">
                       <span className="text-3xl">{c.icon}</span>
                       <span className="font-black text-xs">{c.name}</span>
                     </button>
@@ -265,36 +271,44 @@ const App: React.FC = () => {
 
         {mode === AppMode.STUDY_MODE_SELECT && (
           <div className="max-w-2xl mx-auto py-10 animate-in zoom-in duration-700">
-            <button onClick={() => setMode(AppMode.LESSON_SELECT)} className="mb-12 flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-black transition-colors">
+            <button 
+              onClick={() => selectedLesson?.id === 'global' ? setMode(AppMode.GLOBAL_REVIEW_SELECT) : setMode(AppMode.LESSON_SELECT)} 
+              className="mb-12 flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-black transition-colors"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
               Quay lại danh sách
             </button>
             <div className="text-center mb-16">
-              <div className="text-indigo-600 font-black text-[10px] uppercase tracking-[0.4em] mb-4">Chọn chế độ học</div>
+              <div className="text-indigo-600 font-black text-[10px] uppercase tracking-[0.4em] mb-4">
+                {selectedLesson?.id === 'global' ? 'Chế độ Ôn tập Tổng' : 'Chọn chế độ học'}
+              </div>
               <h2 className="text-5xl font-black text-slate-900 leading-tight">{selectedLesson?.title}</h2>
+              {selectedLesson?.id === 'global' && (
+                <p className="mt-4 text-slate-400 font-bold italic">Toàn bộ kho từ trình độ {selectedCat?.name}</p>
+              )}
             </div>
             <div className="grid grid-cols-1 gap-5">
-              <button onClick={() => setMode(AppMode.FLASHCARD)} className="group bg-white p-8 rounded-[3rem] bento-shadow border-2 border-slate-50 hover:border-indigo-600 transition-all flex items-center gap-8">
+              <button onClick={() => setMode(AppMode.FLASHCARD)} className="group bg-white p-8 rounded-[3rem] bento-shadow border-2 border-slate-50 hover:border-indigo-600 transition-all flex items-center gap-8 text-left">
                 <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-[2rem] flex items-center justify-center text-4xl group-hover:scale-110 group-hover:rotate-6 transition-all">📇</div>
-                <div className="text-left flex-1">
+                <div className="flex-1">
                   <div className="text-2xl font-black text-slate-900 mb-1">Flashcards</div>
                   <div className="text-sm text-slate-400 font-bold">Ghi nhớ từ vựng qua thẻ 3D trực quan</div>
                 </div>
               </button>
               
-              <button onClick={() => setMode(AppMode.REVIEW)} className="group bg-slate-900 p-8 rounded-[3rem] bento-shadow transition-all flex items-center gap-8">
+              <button onClick={() => setMode(AppMode.REVIEW)} className="group bg-slate-900 p-8 rounded-[3rem] bento-shadow transition-all flex items-center gap-8 text-left">
                 <div className="w-20 h-20 bg-white/10 text-white rounded-[2rem] flex items-center justify-center text-4xl group-hover:scale-110 group-hover:-rotate-6 transition-all">✍️</div>
-                <div className="text-left text-white flex-1">
+                <div className="text-white flex-1">
                   <div className="text-2xl font-black mb-1">Thử thách Viết</div>
                   <div className="text-sm text-slate-400 font-bold">Luyện gõ Hán tự và nhận diện nghĩa</div>
                 </div>
               </button>
 
-              <button onClick={() => setMode(AppMode.LISTENING)} className="group bg-white p-8 rounded-[3rem] bento-shadow border-2 border-slate-50 hover:border-purple-600 transition-all flex items-center gap-8">
+              <button onClick={() => setMode(AppMode.LISTENING)} className="group bg-white p-8 rounded-[3rem] bento-shadow border-2 border-slate-50 hover:border-purple-600 transition-all flex items-center gap-8 text-left">
                 <div className="w-20 h-20 bg-purple-50 text-purple-600 rounded-[2rem] flex items-center justify-center text-4xl group-hover:scale-110 group-hover:rotate-6 transition-all">🎧</div>
-                <div className="text-left flex-1">
-                  <div className="text-2xl font-black text-slate-900 mb-1">Luyện nghe siêu cấp</div>
-                  <div className="text-sm text-slate-400 font-bold">Nghe phát âm chuẩn và tái hiện câu</div>
+                <div className="flex-1">
+                  <div className="text-2xl font-black text-slate-900 mb-1">Nghe & Gõ câu</div>
+                  <div className="text-sm text-slate-400 font-bold">Thử thách tái hiện toàn bộ câu ví dụ</div>
                 </div>
               </button>
             </div>
@@ -302,7 +316,7 @@ const App: React.FC = () => {
         )}
 
         {mode === AppMode.FLASHCARD && <FlashcardStudy items={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} onFinish={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
-        {mode === AppMode.REVIEW && <ReviewSession items={vocab} onExit={() => selectedLesson?.id === 'global' ? setMode(AppMode.GLOBAL_REVIEW_SELECT) : setMode(AppMode.STUDY_MODE_SELECT)} onComplete={() => selectedLesson?.id === 'global' ? setMode(AppMode.GLOBAL_REVIEW_SELECT) : setMode(AppMode.STUDY_MODE_SELECT)} />}
+        {mode === AppMode.REVIEW && <ReviewSession items={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} onComplete={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
         {mode === AppMode.LISTENING && <ListeningPractice level={selectedCat?.level || 1} allVocab={vocab} onExit={() => setMode(AppMode.STUDY_MODE_SELECT)} />}
 
         {loading && (
