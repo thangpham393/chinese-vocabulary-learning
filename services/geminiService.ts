@@ -11,15 +11,18 @@ const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
-// --- LOCAL STORAGE FALLBACK LOGIC ---
+// --- LOCAL STORAGE HELPERS ---
 const getLocalLessons = (level: number): Lesson[] => {
   const data = localStorage.getItem(`lessons_${level}`);
   return data ? JSON.parse(data) : [];
 };
 
-const saveLocalLesson = (level: number, lesson: Lesson) => {
-  const current = getLocalLessons(level);
-  localStorage.setItem(`lessons_${level}`, JSON.stringify([...current, lesson]));
+const saveLocalLessons = (level: number, lessons: Lesson[]) => {
+  localStorage.setItem(`lessons_${level}`, JSON.stringify(lessons));
+};
+
+const saveLocalVocab = (lessonId: string | number, vocab: VocabularyItem[]) => {
+  localStorage.setItem(`vocab_${lessonId}`, JSON.stringify(vocab));
 };
 
 const getLocalVocab = (lessonId: string | number): VocabularyItem[] => {
@@ -27,9 +30,13 @@ const getLocalVocab = (lessonId: string | number): VocabularyItem[] => {
   return data ? JSON.parse(data) : [];
 };
 
-const saveLocalVocab = (lessonId: string | number, vocab: VocabularyItem[]) => {
-  localStorage.setItem(`vocab_${lessonId}`, JSON.stringify(vocab));
+const deleteLocalLesson = (lessonId: string | number, level: number) => {
+  const lessons = getLocalLessons(level).filter(l => String(l.id) !== String(lessonId));
+  saveLocalLessons(level, lessons);
+  localStorage.removeItem(`vocab_${lessonId}`);
 };
+
+// --- API FUNCTIONS ---
 
 export const enrichVocabularyWithAI = async (rawWords: string): Promise<VocabularyItem[]> => {
   const wordsArray = rawWords.split(/[\n,，]+/).map(w => w.trim()).filter(w => w.length > 0);
@@ -76,19 +83,24 @@ export const enrichVocabularyWithAI = async (rawWords: string): Promise<Vocabula
 };
 
 export const saveCustomLesson = async (category: Category, lesson: Lesson, vocabulary: VocabularyItem[]) => {
-  const lessonId = Date.now();
-  const newLesson = { ...lesson, id: String(lessonId), level: category.level };
+  const lessonId = lesson.id || String(Date.now());
+  const newLesson = { ...lesson, id: lessonId, level: category.level };
 
   if (supabase) {
     try {
-      const { error: lErr } = await supabase.from('lessons').insert({
+      // Logic xóa cũ trước khi insert nếu là cập nhật (update)
+      if (lesson.id) {
+        await supabase.from('vocabulary').delete().eq('lesson_id', lessonId);
+        await supabase.from('lessons').delete().eq('id', lessonId);
+      }
+
+      await supabase.from('lessons').insert({
         id: lessonId,
         level: category.level,
         number: lesson.number,
         title: lesson.title,
         description: lesson.description
       });
-      if (lErr) throw lErr;
 
       const vocabData = vocabulary.map(v => ({
         lesson_id: lessonId,
@@ -101,17 +113,36 @@ export const saveCustomLesson = async (category: Category, lesson: Lesson, vocab
         example_vi: v.exampleVi
       }));
 
-      const { error: vErr } = await supabase.from('vocabulary').insert(vocabData);
-      if (vErr) throw vErr;
-      
+      await supabase.from('vocabulary').insert(vocabData);
       return true;
     } catch (err) {
-      console.warn("Supabase insert failed, falling back to LocalStorage", err);
+      console.warn("Supabase failed, using local storage");
     }
   }
 
-  saveLocalLesson(category.level, newLesson);
+  // Local storage logic
+  const lessons = getLocalLessons(category.level);
+  const existingIdx = lessons.findIndex(l => String(l.id) === String(lessonId));
+  if (existingIdx > -1) {
+    lessons[existingIdx] = newLesson;
+  } else {
+    lessons.push(newLesson);
+  }
+  saveLocalLessons(category.level, lessons);
   saveLocalVocab(lessonId, vocabulary);
+  return true;
+};
+
+export const deleteLesson = async (lessonId: string | number, level: number) => {
+  if (supabase) {
+    try {
+      await supabase.from('vocabulary').delete().eq('lesson_id', lessonId);
+      await supabase.from('lessons').delete().eq('id', lessonId);
+    } catch (e) {
+      console.warn("Supabase delete failed");
+    }
+  }
+  deleteLocalLesson(lessonId, level);
   return true;
 };
 

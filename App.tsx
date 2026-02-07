@@ -8,7 +8,7 @@ import ListeningPractice from './components/ListeningPractice';
 import BottomNav from './components/BottomNav';
 import { HSK_CATEGORIES, TOPIC_CATEGORIES } from './constants';
 import { AppMode, Category, Lesson, VocabularyItem } from './types';
-import { fetchLessons, fetchVocab, enrichVocabularyWithAI, saveCustomLesson } from './services/geminiService';
+import { fetchLessons, fetchVocab, enrichVocabularyWithAI, saveCustomLesson, deleteLesson } from './services/geminiService';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.HOME);
@@ -49,6 +49,22 @@ const App: React.FC = () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       alert("Lỗi khi tải nội dung bài học.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteLesson = async (e: React.MouseEvent, lesson: Lesson) => {
+    e.stopPropagation();
+    if (!window.confirm(`Bạn có chắc muốn xóa bài học "${lesson.title}" không?`)) return;
+    
+    setLoading(true);
+    try {
+      await deleteLesson(lesson.id, selectedCat?.level || 1);
+      const data = await fetchLessons(selectedCat?.level || 1);
+      setLessons(data);
+    } catch (e) {
+      alert("Xóa bài học thất bại.");
     } finally {
       setLoading(false);
     }
@@ -154,16 +170,19 @@ const App: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {lessons.map(l => (
-                <button key={l.id} onClick={() => handleSelectLesson(l)} className="group relative bg-white p-10 rounded-[3rem] bento-shadow border border-slate-50 text-left transition-all hover:-translate-y-2 hover:border-indigo-200">
+                <div key={l.id} className="group relative bg-white p-10 rounded-[3rem] bento-shadow border border-slate-50 text-left transition-all hover:-translate-y-2 hover:border-indigo-200 cursor-pointer" onClick={() => handleSelectLesson(l)}>
                   <div className="flex justify-between items-center mb-6">
                     <div className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">Lesson {l.number}</div>
-                    <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
-                    </div>
+                    <button 
+                      onClick={(e) => handleDeleteLesson(e, l)}
+                      className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
                   </div>
                   <h3 className="text-3xl font-black text-slate-800 mb-2 leading-tight">{l.title}</h3>
                   <p className="text-slate-400 font-medium">{l.description}</p>
-                </button>
+                </div>
               ))}
               {lessons.length === 0 && (
                 <div className="col-span-full py-32 text-center bg-slate-50 rounded-[4rem] border-2 border-dashed border-slate-200">
